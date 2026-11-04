@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -29,12 +30,27 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.config import ANALYSIS_CATEGORIES, COMPOSITE_METHODS, DATASETS, get_dataset
+from backend.config import (
+    ANALYSIS_CATEGORIES,
+    COMPOSITE_METHODS,
+    DatasetInfo,
+    datasets_by_category,
+    get_dataset,
+)
 from backend.dto import FormDTO, ValidationDTO
 from backend.exceptions import GeeAssistError
+from frontend.widgets.aoi_map_widget import AoiMapWidget
 
 ERROR_STYLE = "color: #c0392b;"
 SUCCESS_STYLE = "color: #1e8449; font-weight: bold;"
+HINT_STYLE = "color: gray;"
+
+AOI_FILE, AOI_BBOX = 0, 1
+
+
+# ---------------------------------------------------------------------- helpers
+def _qdate(value) -> QDate:
+    return QDate(value.year, value.month, value.day)
 
 
 def _bbox_polygon(min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> str:
@@ -54,17 +70,27 @@ def _checked_items(widget: QListWidget) -> list[str]:
     return [
         widget.item(i).text()
         for i in range(widget.count())
-        if widget.item(i).checkState() == Qt.CheckState.Checked
+        if widget.item(i).flags() & Qt.ItemFlag.ItemIsEnabled
+        and widget.item(i).checkState() == Qt.CheckState.Checked
     ]
 
 
-def _fill_checklist(widget: QListWidget, values, checked=()) -> None:
-    widget.clear()
-    for value in values:
-        item = QListWidgetItem(value)
-        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-        item.setCheckState(Qt.CheckState.Checked if value in checked else Qt.CheckState.Unchecked)
-        widget.addItem(item)
+def _add_check_item(widget: QListWidget, text: str, checked: bool, enabled: bool = True, tooltip: str = "") -> None:
+    item = QListWidgetItem(text)
+    flags = item.flags() | Qt.ItemFlag.ItemIsUserCheckable
+    if not enabled:
+        flags &= ~(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+    item.setFlags(flags)
+    item.setCheckState(Qt.CheckState.Checked if checked and enabled else Qt.CheckState.Unchecked)
+    if tooltip:
+        item.setToolTip(tooltip)
+    widget.addItem(item)
+
+
+def _set_combo_item_enabled(combo: QComboBox, index: int, enabled: bool, tooltip: str = "") -> None:
+    item = combo.model().item(index)
+    item.setEnabled(enabled)
+    item.setToolTip(tooltip)
 
 
 class ParameterFormView(QWidget):
@@ -108,7 +134,12 @@ class ParameterFormView(QWidget):
 
         self.dataset_combo.currentIndexChanged.connect(self._on_dataset_changed)
         self.analysis_combo.currentIndexChanged.connect(self._on_analysis_changed)
+        self._aoi_mode.idClicked.connect(self._on_aoi_mode_changed)
         self.import_button.clicked.connect(self._on_import_geojson)
+        self.map_widget.bbox_drawn.connect(self._on_map_bbox_drawn)
+        self.map_widget.bbox_cleared.connect(self._on_map_bbox_cleared)
+        for spin in self._bbox_spins:
+            spin.editingFinished.connect(self._on_bbox_typed)
         self.reset_button.clicked.connect(self.reset)
         self.submit_button.clicked.connect(self._on_submit)
 
@@ -127,15 +158,28 @@ class ParameterFormView(QWidget):
         group = QGroupBox("1. Dataset")
         form = QFormLayout(group)
 
+        # Datasets grouped under non-selectable category headers.
         self.dataset_combo = QComboBox()
-        for key, info in DATASETS.items():
-            self.dataset_combo.addItem(info.name, key)
-        self.collection_label = QLabel()
-        self.collection_label.setStyleSheet("color: gray;")
-        self.collection_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        header_font = QFont()
+        header_font.setBold(True)
+        for category, datasets in datasets_by_category().items():
+            self.dataset_combo.addItem(category)
+            header = self.dataset_combo.model().item(self.dataset_combo.count() - 1)
+            header.setEnabled(False)
+            header.setFont(header_font)
+            for info in datasets:
+                self.dataset_combo.addItem(f"    {info.name}", info.key)
+                self.dataset_combo.setItemData(
+                    self.dataset_combo.count() - 1, info.collection_id, Qt.ItemDataRole.ToolTipRole
+                )
+
+        self.dataset_info_label = QLabel()
+        self.dataset_info_label.setStyleSheet(HINT_STYLE)
+        self.dataset_info_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         self.bands_list = QListWidget()
-        self.bands_list.setMaximumHeight(130)
+        self.bands_list.setMinimumHeight(150)
+        self.bands_list.setMaximumHeight(180)
 
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(1, 100_000)
@@ -151,7 +195,7 @@ class ParameterFormView(QWidget):
         self.composite_combo.setToolTip("How multiple images in the time range are combined into one.")
 
         form.addRow("Dataset:", self.dataset_combo)
-        form.addRow("", self.collection_label)
+        form.addRow("", self.dataset_info_label)
         form.addRow("", self._error_label("dataset"))
         form.addRow("Bands:", self.bands_list)
         form.addRow("", self._error_label("bands"))
@@ -167,32 +211,37 @@ class ParameterFormView(QWidget):
         group = QGroupBox("2. Area of Interest")
         layout = QVBoxLayout(group)
 
-        self.aoi_file_radio = QRadioButton("Import GeoJSON file")
-        self.aoi_bbox_radio = QRadioButton("Enter bounding box")
+        # Either a GeoJSON file OR a bounding box (drawn on the map or typed in).
+        self.aoi_file_radio = QRadioButton("GeoJSON file")
+        self.aoi_bbox_radio = QRadioButton("Bounding box (draw on map or enter coordinates)")
         self._aoi_mode = QButtonGroup(self)
-        self._aoi_mode.addButton(self.aoi_file_radio, 0)
-        self._aoi_mode.addButton(self.aoi_bbox_radio, 1)
+        self._aoi_mode.addButton(self.aoi_file_radio, AOI_FILE)
+        self._aoi_mode.addButton(self.aoi_bbox_radio, AOI_BBOX)
         modes = QHBoxLayout()
         modes.addWidget(self.aoi_file_radio)
         modes.addWidget(self.aoi_bbox_radio)
         modes.addStretch(1)
 
+        self.map_widget = AoiMapWidget()
+        self.map_widget.setMinimumHeight(340)
+
         # page 0: GeoJSON import
         file_page = QWidget()
-        file_layout = QVBoxLayout(file_page)
+        file_layout = QHBoxLayout(file_page)
         file_layout.setContentsMargins(0, 0, 0, 0)
         self.import_button = QPushButton("Import GeoJSON…")
         self.aoi_file_label = QLabel("No file imported.")
         self.aoi_file_label.setWordWrap(True)
-        row = QHBoxLayout()
-        row.addWidget(self.import_button)
-        row.addWidget(self.aoi_file_label, 1)
-        file_layout.addLayout(row)
+        file_layout.addWidget(self.import_button)
+        file_layout.addWidget(self.aoi_file_label, 1)
 
-        # page 1: bounding box
+        # page 1: bounding box coordinates (kept in sync with the map rectangle)
         bbox_page = QWidget()
-        grid = QGridLayout(bbox_page)
-        grid.setContentsMargins(0, 0, 0, 0)
+        bbox_layout = QVBoxLayout(bbox_page)
+        bbox_layout.setContentsMargins(0, 0, 0, 0)
+        hint = QLabel("Draw a rectangle on the map, or type the coordinates (WGS84 degrees):")
+        hint.setStyleSheet(HINT_STYLE)
+        grid = QGridLayout()
 
         def coord_spin(limit: float) -> QDoubleSpinBox:
             spin = QDoubleSpinBox()
@@ -203,21 +252,24 @@ class ParameterFormView(QWidget):
 
         self.min_lon_spin, self.max_lon_spin = coord_spin(180), coord_spin(180)
         self.min_lat_spin, self.max_lat_spin = coord_spin(90), coord_spin(90)
-        grid.addWidget(QLabel("Min longitude:"), 0, 0)
+        self._bbox_spins = (self.min_lon_spin, self.min_lat_spin, self.max_lon_spin, self.max_lat_spin)
+        grid.addWidget(QLabel("West (min lon):"), 0, 0)
         grid.addWidget(self.min_lon_spin, 0, 1)
-        grid.addWidget(QLabel("Max longitude:"), 0, 2)
+        grid.addWidget(QLabel("East (max lon):"), 0, 2)
         grid.addWidget(self.max_lon_spin, 0, 3)
-        grid.addWidget(QLabel("Min latitude:"), 1, 0)
+        grid.addWidget(QLabel("South (min lat):"), 1, 0)
         grid.addWidget(self.min_lat_spin, 1, 1)
-        grid.addWidget(QLabel("Max latitude:"), 1, 2)
+        grid.addWidget(QLabel("North (max lat):"), 1, 2)
         grid.addWidget(self.max_lat_spin, 1, 3)
+        bbox_layout.addWidget(hint)
+        bbox_layout.addLayout(grid)
 
         self.aoi_stack = QStackedWidget()
         self.aoi_stack.addWidget(file_page)
         self.aoi_stack.addWidget(bbox_page)
-        self._aoi_mode.idClicked.connect(self.aoi_stack.setCurrentIndex)
 
         layout.addLayout(modes)
+        layout.addWidget(self.map_widget)
         layout.addWidget(self.aoi_stack)
         layout.addWidget(self._error_label("aoi"))
         return group
@@ -230,7 +282,6 @@ class ParameterFormView(QWidget):
             edit = QDateEdit()
             edit.setCalendarPopup(True)
             edit.setDisplayFormat("yyyy-MM-dd")
-            edit.setMaximumDate(QDate.currentDate())
             return edit
 
         self.start_date_edit = date_edit()
@@ -244,59 +295,110 @@ class ParameterFormView(QWidget):
         group = QGroupBox("4. Analysis")
         form = QFormLayout(group)
         self.analysis_combo = QComboBox()
+        self.analysis_combo.addItems(ANALYSIS_CATEGORIES.keys())
         self.processes_list = QListWidget()
-        self.processes_list.setMaximumHeight(110)
+        self.processes_list.setMinimumHeight(130)
+        self.processes_list.setMaximumHeight(160)
+        hint = QLabel("Greyed-out options are not available for the selected dataset.")
+        hint.setStyleSheet(HINT_STYLE)
         form.addRow("Analysis type:", self.analysis_combo)
         form.addRow("", self._error_label("analysis_type"))
         form.addRow("Processes:", self.processes_list)
         form.addRow("", self._error_label("processes"))
+        form.addRow("", hint)
         return group
 
     # ------------------------------------------------------------- behaviour
     def reset(self) -> None:
-        self.dataset_combo.setCurrentIndex(0)
-        self._on_dataset_changed()
-        self.composite_combo.setCurrentText("median")
-        self.aoi_file_radio.setChecked(True)
-        self.aoi_stack.setCurrentIndex(0)
-        self._imported_aoi = ""
-        self._imported_name = ""
-        self.aoi_file_label.setText("No file imported.")
-        for spin in (self.min_lon_spin, self.min_lat_spin, self.max_lon_spin, self.max_lat_spin):
-            spin.setValue(0.0)
         today = QDate.currentDate()
         self.end_date_edit.setDate(today)
         self.start_date_edit.setDate(today.addMonths(-3))
+
+        self.dataset_combo.setCurrentIndex(self.dataset_combo.findData("sentinel2_sr"))
+        self._on_dataset_changed()
+
+        self._imported_aoi = ""
+        self._imported_name = ""
+        self.aoi_file_label.setText("No file imported.")
+        self.map_widget.show_geojson("")
+        self._set_bbox_spins(0.0, 0.0, 0.0, 0.0)
+        self.map_widget.clear_bbox()
+        self.aoi_file_radio.setChecked(True)
+        self._on_aoi_mode_changed(AOI_FILE)
+
         self._show_validation(ValidationDTO())
         self.status_label.clear()
 
+    def _current_dataset(self) -> DatasetInfo | None:
+        return get_dataset(self.dataset_combo.currentData())
+
     def _on_dataset_changed(self) -> None:
-        info = get_dataset(self.dataset_combo.currentData())
+        info = self._current_dataset()
         if info is None:
             return
-        self.collection_label.setText(info.collection_id)
-        _fill_checklist(self.bands_list, info.bands, checked=info.default_bands)
+
+        until = info.max_date.isoformat() if info.max_date else "present"
+        self.dataset_info_label.setText(f"{info.collection_id}  ·  available {info.min_date.isoformat()} → {until}")
+
+        self.bands_list.clear()
+        for band in info.bands:
+            _add_check_item(self.bands_list, band, checked=band in info.default_bands)
         self.scale_spin.setValue(info.default_scale)
+        self.composite_combo.setCurrentText(info.default_composite)
 
         self.cloud_spin.setEnabled(info.supports_cloud_filter)
         self.cloud_spin.setValue(20 if info.supports_cloud_filter else 0)
 
-        min_date = QDate(info.min_date.year, info.min_date.month, info.min_date.day)
-        self.start_date_edit.setMinimumDate(min_date)
-        self.end_date_edit.setMinimumDate(min_date)
+        self._apply_date_limits(info)
+        self._apply_analysis_compatibility(info)
 
-        previous = self.analysis_combo.currentText()
+    def _apply_date_limits(self, info: DatasetInfo) -> None:
+        lowest = _qdate(info.min_date)
+        highest = _qdate(info.max_date) if info.max_date else QDate.currentDate()
+        for edit in (self.start_date_edit, self.end_date_edit):
+            edit.setDateRange(lowest, highest)  # out-of-range values are clamped
+        if self.start_date_edit.date() >= self.end_date_edit.date():
+            self.start_date_edit.setDate(self.end_date_edit.date().addMonths(-3))
+
+    def _apply_analysis_compatibility(self, info: DatasetInfo) -> None:
+        """Grey out analysis types the dataset cannot support (UC-03 8c)."""
         self.analysis_combo.blockSignals(True)
-        self.analysis_combo.clear()
-        self.analysis_combo.addItems(info.supported_analyses.keys())
-        if previous in info.supported_analyses:
-            self.analysis_combo.setCurrentText(previous)
+        first_enabled = -1
+        for i in range(self.analysis_combo.count()):
+            category = self.analysis_combo.itemText(i)
+            enabled = category in info.supported_analyses
+            tooltip = "" if enabled else f"Not available for {info.name}"
+            _set_combo_item_enabled(self.analysis_combo, i, enabled, tooltip)
+            if enabled and first_enabled < 0:
+                first_enabled = i
+        if self.analysis_combo.currentText() not in info.supported_analyses:
+            self.analysis_combo.setCurrentIndex(first_enabled)
         self.analysis_combo.blockSignals(False)
         self._on_analysis_changed()
 
     def _on_analysis_changed(self) -> None:
-        processes = ANALYSIS_CATEGORIES.get(self.analysis_combo.currentText(), ())
-        _fill_checklist(self.processes_list, processes)
+        """List every process of the category; grey out the unsupported ones."""
+        info = self._current_dataset()
+        category = self.analysis_combo.currentText()
+        supported = info.supported_analyses.get(category, ()) if info else ()
+        previously_checked = set(_checked_items(self.processes_list))
+
+        self.processes_list.clear()
+        for process in ANALYSIS_CATEGORIES.get(category, ()):
+            enabled = process in supported
+            _add_check_item(
+                self.processes_list,
+                process,
+                checked=process in previously_checked,
+                enabled=enabled,
+                tooltip="" if enabled or info is None else f"Not available for {info.name}",
+            )
+
+    # ------------------------------------------------------------------- AOI
+    def _on_aoi_mode_changed(self, mode: int) -> None:
+        self.aoi_stack.setCurrentIndex(mode)
+        self.map_widget.set_mode("bbox" if mode == AOI_BBOX else "file")
+        self._set_field_error("aoi", "")
 
     def _on_import_geojson(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -309,6 +411,7 @@ class ParameterFormView(QWidget):
         except GeeAssistError as exc:  # 6a / 6b
             self._imported_aoi = ""
             self.aoi_file_label.setText("No file imported.")
+            self.map_widget.show_geojson("")
             self._set_field_error("aoi", str(exc))
             return
 
@@ -320,21 +423,44 @@ class ParameterFormView(QWidget):
             f"<b>{self._imported_name}</b> · {geometry['type']}<br>"
             f"Extent: lon {min_lon:.4f} → {max_lon:.4f}, lat {min_lat:.4f} → {max_lat:.4f}"
         )
+        self.map_widget.show_geojson(aoi)
         self._set_field_error("aoi", "")
 
+    def _set_bbox_spins(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> None:
+        for spin, value in zip(self._bbox_spins, (min_lon, min_lat, max_lon, max_lat)):
+            spin.blockSignals(True)
+            spin.setValue(value)
+            spin.blockSignals(False)
+
+    def _bbox_values(self) -> tuple[float, float, float, float]:
+        lon_a, lat_a, lon_b, lat_b = (s.value() for s in self._bbox_spins)
+        return min(lon_a, lon_b), min(lat_a, lat_b), max(lon_a, lon_b), max(lat_a, lat_b)
+
+    def _on_map_bbox_drawn(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> None:
+        self._set_bbox_spins(max(min_lon, -180), max(min_lat, -90), min(max_lon, 180), min(max_lat, 90))
+        self._set_field_error("aoi", "")
+
+    def _on_map_bbox_cleared(self) -> None:
+        self._set_bbox_spins(0.0, 0.0, 0.0, 0.0)
+
+    def _on_bbox_typed(self) -> None:
+        min_lon, min_lat, max_lon, max_lat = self._bbox_values()
+        if min_lon < max_lon and min_lat < max_lat:
+            self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+
+    # ---------------------------------------------------------------- submit
     def collect_form(self) -> FormDTO:
         """Build a FormDTO from the current widget values."""
         if self.aoi_file_radio.isChecked():
             aoi, aoi_name = self._imported_aoi, self._imported_name
         else:
-            aoi = _bbox_polygon(
-                self.min_lon_spin.value(), self.min_lat_spin.value(),
-                self.max_lon_spin.value(), self.max_lat_spin.value(),
-            )
+            min_lon, min_lat, max_lon, max_lat = self._bbox_values()
+            has_area = min_lon < max_lon and min_lat < max_lat
+            aoi = _bbox_polygon(min_lon, min_lat, max_lon, max_lat) if has_area else ""
             aoi_name = "Bounding box"
 
         return FormDTO(
-            dataset=self.dataset_combo.currentData(),
+            dataset=self.dataset_combo.currentData() or "",
             bands=_checked_items(self.bands_list),
             scale=self.scale_spin.value(),
             max_cloud_cover=self.cloud_spin.value() if self.cloud_spin.isEnabled() else None,
