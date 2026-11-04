@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QMovie
 from PyQt6.QtWidgets import (
     QFrame,
@@ -100,6 +100,7 @@ class Banner(QLabel):
         super().__init__(parent)
         self.setWordWrap(True)
         self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setMargin(4)
         self.hide()
 
     def show_error(self, text: str) -> None:
@@ -157,9 +158,48 @@ def add_soft_shadow(widget: QWidget, blur: int = 48, alpha: int = 34, y_offset: 
 
 def h_line() -> QFrame:
     line = QFrame()
-    line.setFrameShape(QFrame.Shape.HLine)
-    line.setStyleSheet(f"color: {theme.BORDER}; background: {theme.BORDER}; max-height: 1px;")
+    line.setFixedHeight(1)
+    line.setStyleSheet(f"background: {theme.BORDER}; border: none;")
     return line
+
+
+class FitStack(QWidget):
+    """Shows one page at a time and takes the size of that page only.
+
+    QStackedWidget sizes itself to its tallest page (its layout's heightForWidth takes the maximum
+    over all pages), which leaves big gaps on short pages. Here the pages sit in a box layout and
+    all but the current one are hidden; hidden widgets are ignored by every size calculation.
+    """
+
+    currentChanged = pyqtSignal(int)
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._pages: list[QWidget] = []
+        self._current: QWidget | None = None
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+
+    def addWidget(self, page: QWidget) -> int:  # noqa: N802 (Qt naming, same API as QStackedWidget)
+        self._pages.append(page)
+        self._layout.addWidget(page)
+        if self._current is None:
+            self._current = page
+        else:
+            page.hide()
+        return len(self._pages) - 1
+
+    def currentWidget(self) -> QWidget | None:  # noqa: N802
+        return self._current
+
+    def setCurrentWidget(self, page: QWidget) -> None:  # noqa: N802
+        if page is self._current or page not in self._pages:
+            return
+        if self._current is not None:
+            self._current.hide()
+        self._current = page
+        page.show()
+        self.currentChanged.emit(self._pages.index(page))
 
 
 class LoopingGif(QLabel):
@@ -175,13 +215,25 @@ class LoopingGif(QLabel):
             return
         self._movie.jumpToFrame(0)
         native = self._movie.currentImage().size()
-        if native.width() > 0:
-            self._movie.setScaledSize(QSize(width, round(width * native.height() / native.width())))
+        height = round(width * native.height() / native.width()) if native.width() > 0 else width
+        self._size = QSize(width, height)
+        # Frames are scaled here with smooth filtering: QMovie.setScaledSize uses a fast filter
+        # that makes a small GIF look blocky when enlarged.
+        self._movie.frameChanged.connect(self._show_frame)
         # GIFs may stop after their own loop count - restart so it truly loops.
         self._movie.finished.connect(self._movie.start)
-        self.setMovie(self._movie)
-        self.setFixedHeight(self._movie.scaledSize().height())
+        self.setFixedHeight(height)
         self._movie.start()
+
+    def _show_frame(self, _index: int) -> None:
+        ratio = self.devicePixelRatioF()
+        pixmap = self._movie.currentPixmap().scaled(
+            self._size * ratio,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        pixmap.setDevicePixelRatio(ratio)
+        self.setPixmap(pixmap)
 
     def set_playing(self, playing: bool) -> None:
         self._movie.setPaused(not playing)
