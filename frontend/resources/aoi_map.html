@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!--
+  AOI map used by frontend/widgets/aoi_map_widget.py.
+  Python <-> JS talk through QWebChannel ("bridge" object).
+  Needs an internet connection for Leaflet and the map tiles (SRS constraint C-01).
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    .hint { background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font: 12px sans-serif; }
+  </style>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <!-- qwebchannel.js is injected by AoiMapWidget (qrc: URLs are blocked once remote access is enabled) -->
+</head>
+<body>
+<div id="map"></div>
+<script>
+  var esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+  var streets = L.tileLayer(esri + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles &copy; Esri' });
+  var imagery = L.tileLayer(esri + 'World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles &copy; Esri' });
+  var labels = L.tileLayer(esri + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19 });
+
+  var map = L.map('map', { worldCopyJump: true }).setView([30.4, 69.3], 5);
+  streets.addTo(map);
+  L.control.layers(
+      { 'Streets': streets, 'Satellite': imagery },
+      { 'Place labels': labels }
+  ).addTo(map);
+  L.control.scale().addTo(map);
+
+  // Layers: user-drawn rectangle (bbox mode) and imported GeoJSON outline (file mode)
+  var drawn = new L.FeatureGroup().addTo(map);
+  var footprint = L.geoJSON(null, { style: { color: '#e67e22', weight: 2, fillOpacity: 0.15 } }).addTo(map);
+  var rectStyle = { color: '#2e86de', weight: 2, fillOpacity: 0.15 };
+
+  var drawControl = new L.Control.Draw({
+    draw: { rectangle: { shapeOptions: rectStyle }, polygon: false, polyline: false,
+            circle: false, marker: false, circlemarker: false },
+    edit: { featureGroup: drawn }
+  });
+
+  var hint = L.control({ position: 'bottomleft' });
+  hint.onAdd = function () {
+    var div = L.DomUtil.create('div', 'hint');
+    div.innerHTML = 'Use the &#9645; tool (top-left) to draw the bounding box.';
+    return div;
+  };
+
+  var bridge = null;
+  new QWebChannel(qt.webChannelTransport, function (channel) {
+    bridge = channel.objects.bridge;
+    bridge.mapReady();
+  });
+
+  function emitBounds(layer) {
+    if (!bridge) return;
+    var b = layer.getBounds();
+    bridge.bboxDrawn(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+  }
+
+  map.on(L.Draw.Event.CREATED, function (e) {
+    drawn.clearLayers();
+    drawn.addLayer(e.layer);
+    emitBounds(e.layer);
+  });
+  map.on(L.Draw.Event.EDITED, function (e) { e.layers.eachLayer(emitBounds); });
+  map.on(L.Draw.Event.DELETED, function () { if (bridge) bridge.bboxCleared(); });
+
+  // ---- called from Python ----
+  var mode = null;
+  function setMode(newMode) {
+    if (newMode === mode) return;
+    mode = newMode;
+    if (mode === 'bbox') {
+      map.addControl(drawControl);
+      hint.addTo(map);
+      map.removeLayer(footprint);
+      map.addLayer(drawn);
+    } else {
+      map.removeControl(drawControl);
+      hint.remove();
+      map.removeLayer(drawn);
+      map.addLayer(footprint);
+    }
+  }
+
+  function setBbox(west, south, east, north, fit) {
+    drawn.clearLayers();
+    var rect = L.rectangle([[south, west], [north, east]], rectStyle);
+    drawn.addLayer(rect);
+    if (fit) map.fitBounds(rect.getBounds(), { maxZoom: 14 });
+  }
+
+  function clearBbox() { drawn.clearLayers(); }
+
+  function showGeoJSON(text) {
+    footprint.clearLayers();
+    if (!text) return;
+    footprint.addData(JSON.parse(text));
+    map.fitBounds(footprint.getBounds(), { maxZoom: 14 });
+  }
+</script>
+</body>
+</html>
