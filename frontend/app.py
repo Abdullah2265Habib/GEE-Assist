@@ -6,6 +6,11 @@ from PyQt6.QtCore import QObject
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
+try:  # Qt requires QtWebEngine to be imported before QApplication is created (animated SVG, AOI map)
+    import PyQt6.QtWebEngineWidgets  # noqa: F401
+except ImportError:
+    pass
+
 from backend.bootstrap import build_business_facade
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO

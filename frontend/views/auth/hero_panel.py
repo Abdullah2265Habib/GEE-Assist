@@ -7,8 +7,8 @@ from PyQt6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath,
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from frontend import theme
-from frontend.assets import APP_ICON, EARTH_GIF
-from frontend.widgets.form_widgets import LoopingGif
+from frontend.assets import APP_ICON, EARTH_SVG
+from frontend.widgets.animated_svg import AnimatedSvg
 
 _FEATURES = (
     "Ask in plain language, get satellite analysis",
@@ -32,7 +32,8 @@ class HeroPanel(QFrame):
         brand.addWidget(brand_name)
         brand.addStretch(1)
 
-        self.earth = LoopingGif(EARTH_GIF, 300)  # exactly 2x the GIF, keeps its pixels even
+        # the sign-in screen fades in over ~700 ms after the intro; the picture follows it
+        self.earth = AnimatedSvg(EARTH_SVG, 460, reveal_delay_ms=550)
 
         headline = QLabel("Explore our planet,\none question at a time.")
         headline.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -61,7 +62,7 @@ class HeroPanel(QFrame):
         layout.setSpacing(0)
         layout.addLayout(brand)
         layout.addStretch(3)
-        layout.addWidget(self.earth)
+        layout.addWidget(self.earth, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addSpacing(26)
         layout.addWidget(headline)
         layout.addSpacing(12)
