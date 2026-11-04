@@ -9,9 +9,10 @@ from PyQt6.QtWidgets import QLabel, QProgressBar, QWidget
 from backend.auth_exceptions import AuthError, NotFoundError, ServerUnavailableError
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import GoogleSignInDTO, UserDTO
-from frontend.assets import EARTH_GIF
+from frontend.assets import EARTH_SVG
 from frontend.views.auth.base_page import AuthPage, centered_row
-from frontend.widgets.form_widgets import BusyButton, LoopingGif, link_button
+from frontend.widgets.animated_svg import AnimatedSvg
+from frontend.widgets.form_widgets import BusyButton, link_button
 from frontend.workers.task_worker import run_task
 
 
@@ -34,7 +35,7 @@ class GooglePage(AuthPage):
         self._active = False
         self._elapsed = QElapsedTimer()
 
-        self.body.insertWidget(0, LoopingGif(EARTH_GIF, 150))  # native size
+        self.body.insertWidget(0, AnimatedSvg(EARTH_SVG, 220, reveal_delay_ms=200), 0, Qt.AlignmentFlag.AlignHCenter)
         self.waiting = QProgressBar(objectName="BusyBar")
         self.waiting.setRange(0, 0)
         self.waiting.setTextVisible(False)

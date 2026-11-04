@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QMovie
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QLabel,
     QLineEdit,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -205,40 +201,3 @@ class FitStack(QWidget):
         self._current = page
         page.show()
         self.currentChanged.emit(self._pages.index(page))
-
-
-class LoopingGif(QLabel):
-    """Shows an animated GIF that loops forever, scaled smoothly to ``width``."""
-
-    def __init__(self, path: Path, width: int, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self._movie = QMovie(str(path), parent=self)
-        self._movie.setCacheMode(QMovie.CacheMode.CacheAll)
-        if not self._movie.isValid():
-            return
-        self._movie.jumpToFrame(0)
-        native = self._movie.currentImage().size()
-        height = round(width * native.height() / native.width()) if native.width() > 0 else width
-        self._size = QSize(width, height)
-        # Frames are scaled here with smooth filtering: QMovie.setScaledSize uses a fast filter
-        # that makes a small GIF look blocky when enlarged.
-        self._movie.frameChanged.connect(self._show_frame)
-        # GIFs may stop after their own loop count - restart so it truly loops.
-        self._movie.finished.connect(self._movie.start)
-        self.setFixedHeight(height)
-        self._movie.start()
-
-    def _show_frame(self, _index: int) -> None:
-        ratio = self.devicePixelRatioF()
-        pixmap = self._movie.currentPixmap().scaled(
-            self._size * ratio,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        pixmap.setDevicePixelRatio(ratio)
-        self.setPixmap(pixmap)
-
-    def set_playing(self, playing: bool) -> None:
-        self._movie.setPaused(not playing)
