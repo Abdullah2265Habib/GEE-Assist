@@ -1,4 +1,5 @@
-"""Left half of the sign-in screen: soft earth gradient, orbit lines and the looping Earth GIF."""
+"""Right side of the sign-in screen: soft earth gradient with the app description, and the small
+animated Earth in the bottom-right corner."""
 
 from __future__ import annotations
 
@@ -16,29 +17,34 @@ _FEATURES = (
     "Maps, explanations and downloadable reports",
 )
 
+EARTH_WIDTH = 210          # small animation in the corner
+EARTH_MARGIN = 18          # distance from the panel's right / bottom edges
+
+
+def brand_row() -> QHBoxLayout:
+    """App logo + name, shown in the top-left corner of the sign-in screen."""
+    icon = QLabel()
+    icon.setPixmap(round_logo(46, 2.0))
+    name = QLabel("GEE-Assist")
+    name.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK}; background: transparent;")
+    row = QHBoxLayout()
+    row.setSpacing(12)
+    row.addWidget(icon)
+    row.addWidget(name)
+    row.addStretch(1)
+    return row
+
 
 class HeroPanel(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setMinimumWidth(380)
-
-        brand_icon = QLabel()
-        brand_icon.setPixmap(round_logo(46, self.devicePixelRatioF()))
-        brand_name = QLabel("GEE-Assist")
-        brand_name.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK};")
-        brand = QHBoxLayout()
-        brand.setSpacing(12)
-        brand.addWidget(brand_icon)
-        brand.addWidget(brand_name)
-        brand.addStretch(1)
-
-        # the sign-in screen fades in over ~700 ms after the intro; the picture follows it
-        self.earth = AnimatedSvg(EARTH_SVG, 460, reveal_delay_ms=550)
+        self.setMinimumWidth(420)  # the feature lines stay on one line
 
         headline = QLabel("Explore our planet,\none question at a time.")
         headline.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        headline.setWordWrap(True)
         headline.setStyleSheet(
-            f"font-family: '{theme.SERIF}'; font-size: 25pt; color: {theme.INK}; background: transparent;"
+            f"font-family: '{theme.SERIF}'; font-size: 24pt; color: {theme.INK}; background: transparent;"
         )
         tagline = QLabel("Your conversational gateway to Google Earth Engine.")
         tagline.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -55,22 +61,24 @@ class HeroPanel(QFrame):
         features_box.addStretch(1)
 
         footer = QLabel("Powered by Google Earth Engine")
-        footer.setStyleSheet(f"color: {theme.SUBTLE}; font-size: 9pt; letter-spacing: 0.5px;")
+        footer.setStyleSheet(f"color: {theme.SUBTLE}; font-size: 9pt; letter-spacing: 0.5px; background: transparent;")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(48, 36, 48, 30)
+        layout.setContentsMargins(40, 36, 40, 30)
         layout.setSpacing(0)
-        layout.addLayout(brand)
-        layout.addStretch(3)
-        layout.addWidget(self.earth, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addSpacing(26)
+        layout.addStretch(1)
         layout.addWidget(headline)
         layout.addSpacing(12)
         layout.addWidget(tagline)
         layout.addSpacing(28)
         layout.addLayout(features_box)
-        layout.addStretch(4)
+        layout.addStretch(1)
         layout.addWidget(footer)
+
+        # Not part of the layout: pinned to the bottom-right corner in resizeEvent.
+        # The sign-in screen fades in over ~700 ms after the intro; the picture follows it.
+        self.earth = AnimatedSvg(EARTH_SVG, EARTH_WIDTH, reveal_delay_ms=550, parent=self)
+        self.earth.raise_()
 
     @staticmethod
     def _feature(text: str) -> QHBoxLayout:
@@ -88,7 +96,16 @@ class HeroPanel(QFrame):
         row.addWidget(label)
         return row
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+    def _earth_rect(self) -> QRectF:
+        e = self.earth
+        return QRectF(self.width() - e.width() - EARTH_MARGIN, self.height() - e.height() - EARTH_MARGIN,
+                      e.width(), e.height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self.earth.move(self._earth_rect().topLeft().toPoint())
+
+    def paintEvent(self, event) -> None:  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
@@ -100,30 +117,32 @@ class HeroPanel(QFrame):
         base.setColorAt(1.0, QColor("#E2EEF9"))
         p.fillRect(self.rect(), base)
 
-        # Soft glow behind the globe.
-        centre = QPointF(w / 2, h * 0.40)
-        glow = QRadialGradient(centre, min(w, h) * 0.42)
-        glow.setColorAt(0.0, theme.color(theme.WHITE, 235))
-        glow.setColorAt(0.6, theme.color(theme.WHITE, 90))
+        # Soft glow behind the text.
+        centre = QPointF(w / 2, h * 0.46)
+        radius = min(w, h) * 0.48
+        glow = QRadialGradient(centre, radius)
+        glow.setColorAt(0.0, theme.color(theme.WHITE, 220))
+        glow.setColorAt(0.6, theme.color(theme.WHITE, 80))
         glow.setColorAt(1.0, theme.color(theme.WHITE, 0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(glow))
-        p.drawEllipse(centre, min(w, h) * 0.42, min(w, h) * 0.42)
+        p.drawEllipse(centre, radius, radius)
 
-        # Thin orbit lines, like the logo's.
+        # Thin orbit lines circling the Earth in the corner, like the logo's.
+        earth_centre = self._earth_rect().center()
         p.setBrush(Qt.BrushStyle.NoBrush)
-        for i, (colour, alpha) in enumerate(((theme.LEAF, 55), (theme.OCEAN, 45), (theme.OCEAN, 28))):
-            rx, ry = w * (0.40 + 0.09 * i), h * (0.13 + 0.035 * i)
+        for i, (colour, alpha) in enumerate(((theme.LEAF, 60), (theme.OCEAN, 45), (theme.OCEAN, 26))):
+            rx, ry = EARTH_WIDTH * (0.75 + 0.45 * i), EARTH_WIDTH * (0.30 + 0.16 * i)
             p.save()
-            p.translate(centre)
-            p.rotate(-14 + 9 * i)
-            p.setPen(QPen(theme.color(colour, alpha), 1.4))
+            p.translate(earth_centre)
+            p.rotate(-18 + 7 * i)
+            p.setPen(QPen(theme.color(colour, alpha), 1.3))
             p.drawEllipse(QRectF(-rx, -ry, 2 * rx, 2 * ry))
             p.restore()
 
         # Hairline separating the panel from the form.
         p.setPen(QPen(QColor(theme.BORDER), 1))
-        p.drawLine(w - 1, 0, w - 1, h)
+        p.drawLine(0, 0, 0, h)
         p.end()
 
 
