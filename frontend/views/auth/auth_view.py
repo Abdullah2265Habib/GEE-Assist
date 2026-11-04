@@ -17,7 +17,7 @@ from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import SignupResultDTO, UserDTO
 from frontend import theme
 from frontend.views.auth.google_page import GooglePage
-from frontend.views.auth.hero_panel import HeroPanel
+from frontend.views.auth.hero_panel import HeroPanel, brand_row
 from frontend.views.auth.login_page import LoginPage
 from frontend.views.auth.signup_page import SignupPage
 from frontend.views.auth.verification_page import DEFAULT_COOLDOWN_SECONDS, VerificationPage
@@ -25,7 +25,7 @@ from frontend.widgets.fade import fade_in
 from frontend.widgets.form_widgets import FitStack, add_soft_shadow, link_button
 from frontend.workers.task_worker import run_task
 
-CARD_WIDTH = 480
+CARD_WIDTH = 580
 SERVER_RETRY_MS = 10_000
 
 
@@ -55,7 +55,7 @@ class AuthView(QWidget):
         self.card = QFrame(objectName="AuthCard")
         self.card.setFixedWidth(CARD_WIDTH)
         card_layout = QVBoxLayout(self.card)
-        card_layout.setContentsMargins(40, 36, 40, 34)
+        card_layout.setContentsMargins(48, 40, 48, 36)
         card_layout.addWidget(self.pages)
         add_soft_shadow(self.card)
 
@@ -73,7 +73,7 @@ class AuthView(QWidget):
         status.addStretch(1)
         self._set_server_state(None)
 
-        # ---- right side (scrolls on small screens)
+        # ---- left side: the form (scrolls on small screens)
         column = QVBoxLayout()
         column.setContentsMargins(0, 0, 0, 0)
         column.addStretch(1)
@@ -96,12 +96,23 @@ class AuthView(QWidget):
         scroll.setMinimumWidth(CARD_WIDTH + 2 * 32 + 12)
         scroll.setStyleSheet(f"QScrollArea, QScrollArea > QWidget > QWidget {{ background: {theme.WHITE}; }}")
 
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+        brand = QWidget()
+        brand.setLayout(brand_row())
+        brand.layout().setContentsMargins(48, 36, 48, 0)
+        left_layout.addWidget(brand)
+        left_layout.addWidget(scroll, 1)
+
+        # ---- right side: description + small animated Earth in the corner
         self.hero = HeroPanel()
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(self.hero, 11)
-        layout.addWidget(scroll, 10)
+        layout.addWidget(left, 3)
+        layout.addWidget(self.hero, 2)
 
         # ---- wiring
         self.login_page.logged_in.connect(self._finish)
