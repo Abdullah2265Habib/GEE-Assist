@@ -17,7 +17,7 @@ from frontend.workers.task_worker import run_task
 _PROVIDERS = {"local": "Username and password", "google": "Google"}
 
 
-def _format_date(value: datetime | None) -> str:
+def format_date(value: datetime | None) -> str:
     if value is None:
         return "—"
     return value.astimezone().strftime("%d %b %Y, %H:%M")
@@ -104,8 +104,8 @@ class AccountView(QFrame):
         self._values["phone"].setText(user.phone_number or "—")
         self._values["role"].setText("Administrator" if user.is_admin else "User")
         self._values["provider"].setText(_PROVIDERS.get(user.auth_provider, user.auth_provider.title()))
-        self._values["created"].setText(_format_date(user.created_at))
-        self._values["last_login"].setText(_format_date(user.last_login_at))
+        self._values["created"].setText(format_date(user.created_at))
+        self._values["last_login"].setText(format_date(user.last_login_at))
 
     def reload(self) -> None:
         self.banner.clear()
