@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 
 import pytest
 
 from backend.business.request import RequestService
+from backend.config import ANALYSIS_CATEGORIES, DATASETS
 from backend.dto import FormDTO
 from backend.exceptions import AOIImportError
 
@@ -68,6 +70,46 @@ def test_invalid_form_reports_field_and_is_not_kept(overrides, field):
     assert not result.is_valid
     assert field in result.errors
     assert service.get_kept_requests() == []
+
+
+def test_end_date_after_discontinued_dataset_rejected():
+    form = valid_form(dataset="landsat5_l2", bands=["SR_B3", "SR_B4"], scale=30,
+                      start_date=date(2011, 1, 1), end_date=date(2013, 1, 1))
+    result = RequestService().validate_form(form)
+    assert "dates" in result.errors
+
+
+def test_sar_dataset_rejects_optical_water_index():
+    form = valid_form(dataset="sentinel1_grd", bands=["VV"], max_cloud_cover=None,
+                      analysis_type="Water", processes=["NDWI"])
+    result = RequestService().validate_form(form)
+    assert "processes" in result.errors
+    ok = RequestService().validate_form(replace(form, processes=["WaterBodyDetection"]))
+    assert ok.is_valid, ok.errors
+
+
+@pytest.mark.parametrize("key", list(DATASETS))
+def test_every_catalogue_dataset_accepts_its_own_defaults(key):
+    """Catalogue consistency: defaults + any supported analysis must validate."""
+    info = DATASETS[key]
+    category, processes = next(iter(info.supported_analyses.items()))
+    end = info.max_date or date.today()
+    form = valid_form(
+        dataset=key,
+        bands=list(info.default_bands),
+        scale=info.default_scale,
+        max_cloud_cover=20 if info.supports_cloud_filter else None,
+        composite=info.default_composite,
+        start_date=max(info.min_date, end - timedelta(days=90)),
+        end_date=end,
+        analysis_type=category,
+        processes=[processes[0]],
+    )
+    result = RequestService().validate_form(form)
+    assert result.is_valid, result.errors
+    assert set(info.default_bands) <= set(info.bands)
+    for category, procs in info.supported_analyses.items():
+        assert set(procs) <= set(ANALYSIS_CATEGORIES[category])
 
 
 def test_cloud_filter_rejected_for_dataset_without_it():
