@@ -139,6 +139,11 @@ class BusyButton(QPushButton):
         self.setEnabled(not busy)
         self.setText(self._busy_text if busy else self._idle_text)
 
+    def set_idle_text(self, text: str) -> None:
+        self._idle_text = text
+        if self.isEnabled():
+            self.setText(text)
+
 
 def link_button(text: str, parent: QWidget | None = None) -> QPushButton:
     button = QPushButton(text, parent)

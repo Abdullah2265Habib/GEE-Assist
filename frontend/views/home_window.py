@@ -14,6 +14,7 @@ from backend.dto.user_dto import UserDTO
 from frontend import theme
 from frontend.views.account_view import AccountView, Avatar
 from frontend.views.auth.hero_panel import round_logo
+from frontend.views.user_admin_view import UserAdminDialog
 
 
 class HomeWindow(QMainWindow):
@@ -41,8 +42,12 @@ class HomeWindow(QMainWindow):
         self.sign_out_button = QPushButton("Sign out", objectName="SecondaryButton")
         self.sign_out_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.header_actions = QHBoxLayout()  # extra buttons (e.g. user management) go here
+        self.manage_users = QPushButton("Manage users", objectName="SecondaryButton")
+        self.manage_users.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
+        self.header_actions = QHBoxLayout()  # extra buttons go here
         self.header_actions.setSpacing(10)
+        self.header_actions.addWidget(self.manage_users)
 
         header = QFrame(objectName="HomeHeader")
         header.setStyleSheet(
@@ -89,10 +94,25 @@ class HomeWindow(QMainWindow):
         self.account.session_expired.connect(
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
+        self.manage_users.clicked.connect(self._open_user_admin)
+        self._admin_dialog: UserAdminDialog | None = None
         self.set_user(user)
+
+    def _open_user_admin(self) -> None:
+        if self._admin_dialog is None:
+            self._admin_dialog = UserAdminDialog(self._facade, self)
+            self._admin_dialog.session_expired.connect(
+                lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
+            )
+        else:
+            self._admin_dialog.reload()
+        self._admin_dialog.show()
+        self._admin_dialog.raise_()
+        self._admin_dialog.activateWindow()
 
     def set_user(self, user: UserDTO) -> None:
         self.user_avatar.set_user(user)
         self.user_name.setText(user.full_name)
         self.user_role.setText("Administrator" if user.is_admin else "User")
+        self.manage_users.setVisible(user.is_admin)
         self.account.set_user(user)
