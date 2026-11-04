@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from backend.business.request.i_request_service import IRequestService
 from backend.dto import FormDTO, ValidationDTO
+from backend.config.limits import MAX_QUERY_LENGTH
+from backend.exceptions import ValidationError
 
 
 class RequestService(IRequestService):
@@ -19,7 +21,21 @@ class RequestService(IRequestService):
     # UC-02 Enter Natural Language Query      (branch: query-input-nl)
     # ------------------------------------------------------------------
     def submit_query(self, text: str) -> FormDTO:
-        raise NotImplementedError("Natural-language input is built on branch query-input-nl.")
+        """Validate and keep the query. Returns a FormDTO holding only the query
+        text; Interpret Query (LLM) fills in the parameters at the next stage.
+
+        Raises:
+            ValidationError: the query is empty (5a) or too long.
+        """
+        query = " ".join((text or "").split())
+        if not query:
+            raise ValidationError("Please enter a request describing the data or analysis you need.")
+        if len(query) > MAX_QUERY_LENGTH:
+            raise ValidationError(f"The query is too long ({len(query)} characters, limit {MAX_QUERY_LENGTH}).")
+
+        form = FormDTO(source="nl", query_text=query)
+        self._keep(form)
+        return form
 
     # ------------------------------------------------------------------
     # UC-03 Fill Parameter Form               (branch: query-input-form)
