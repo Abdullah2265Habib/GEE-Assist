@@ -40,7 +40,7 @@ class RequestService(IRequestService):
 
         # 4. AOI (imported GeoJSON or bounding box)
         if not form.aoi:
-            result.add_error("aoi", "Specify an Area of Interest: import a GeoJSON file or enter a bounding box.")
+            result.add_error("aoi", "Specify an Area of Interest: import a GeoJSON file, or draw / enter a bounding box.")
         else:
             try:
                 aoi_error = validate_geometry(json.loads(form.aoi))
@@ -58,6 +58,8 @@ class RequestService(IRequestService):
             result.add_error("dates", "End date cannot be in the future.")
         elif info is not None and form.start_date < info.min_date:
             result.add_error("dates", f"{info.name} data is only available from {info.min_date.isoformat()}.")
+        elif info is not None and info.max_date is not None and form.end_date > info.max_date:
+            result.add_error("dates", f"{info.name} data is only available until {info.max_date.isoformat()}.")
 
         # bands / scale / cloud / composite
         if info is not None:
