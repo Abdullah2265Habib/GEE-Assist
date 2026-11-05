@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from datetime import date
+from pathlib import Path
 
-from backend.business.request.geojson_utils import read_aoi_geometry, validate_geometry
+from backend.business.request.geojson_utils import read_aoi_geometry, utm_epsg_for, validate_geometry
 from backend.business.request.i_request_service import IRequestService
-from backend.config import COMPOSITE_METHODS, get_dataset
+from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
 from backend.dto import FormDTO, ValidationDTO
+
+_EPSG_CODE = re.compile(r"^EPSG:\d{4,5}$")
 
 
 class RequestService(IRequestService):
@@ -39,15 +43,18 @@ class RequestService(IRequestService):
             result.add_error("dataset", "Select a supported dataset.")
 
         # 4. AOI (imported GeoJSON, or a rectangle / circle / polygon drawn on the map)
+        geometry = None
         if not form.aoi:
             result.add_error("aoi", "Specify an Area of Interest: import a GeoJSON file, or draw a rectangle, circle or polygon on the map.")
         else:
             try:
-                aoi_error = validate_geometry(json.loads(form.aoi))
+                geometry = json.loads(form.aoi)
+                aoi_error = validate_geometry(geometry)
             except json.JSONDecodeError:
                 aoi_error = "AOI is not valid GeoJSON."
             if aoi_error:
                 result.add_error("aoi", aoi_error)
+                geometry = None
 
         # 5. temporal range (8b)
         if form.start_date is None or form.end_date is None:
@@ -79,10 +86,22 @@ class RequestService(IRequestService):
         if form.composite not in COMPOSITE_METHODS:
             result.add_error("composite", f"Composite must be one of: {', '.join(COMPOSITE_METHODS)}.")
 
-        # 6. analysis type (8c: dataset must support it)
+        # output: projection and folder for the downloaded GeoTIFF(s)
+        if form.crs != AUTO_UTM and not _EPSG_CODE.match(form.crs or ""):
+            result.add_error("crs", "Projection must be an EPSG code such as EPSG:4326.")
+        output_dir = (form.output_dir or "").strip()
+        if not output_dir:
+            result.add_error("output_dir", "Choose a folder to save the download in.")
+        elif Path(output_dir).exists() and not Path(output_dir).is_dir():
+            result.add_error("output_dir", "The output location is a file, not a folder.")
+        elif not Path(output_dir).is_absolute():
+            result.add_error("output_dir", "Use a full folder path, e.g. C:\\GEE-Assist\\downloads.")
+
+        # 6. analysis type: optional for now (empty = download only).
+        #    When one is chosen, the dataset must support it (8c).
         supported = info.supported_analyses if info is not None else {}
         if not form.analysis_type:
-            result.add_error("analysis_type", "Select an analysis type.")
+            pass  # download only: nothing else to check
         elif info is not None and form.analysis_type not in supported:
             result.add_error(
                 "analysis_type",
@@ -98,7 +117,9 @@ class RequestService(IRequestService):
 
         # 9. keep validated parameters
         if result.is_valid:
-            self._keep(replace(form, source="form"))
+            crs = utm_epsg_for(geometry) if form.crs == AUTO_UTM else form.crs
+            processes = form.processes if form.analysis_type else []
+            self._keep(replace(form, source="form", crs=crs, output_dir=output_dir, processes=processes))
             result.message = "Parameters accepted and kept."
         else:
             result.message = "Please correct the highlighted fields."
