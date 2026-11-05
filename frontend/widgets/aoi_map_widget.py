@@ -13,6 +13,7 @@ falls back to manual coordinate entry.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from PyQt6.QtCore import QFile, QIODevice, QObject, Qt, QUrl, pyqtSignal, pyqtSlot
@@ -20,7 +21,7 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 try:
     from PyQt6.QtWebChannel import QWebChannel
-    from PyQt6.QtWebEngineCore import QWebEngineScript, QWebEngineSettings
+    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineScript, QWebEngineSettings
     from PyQt6.QtWebEngineWidgets import QWebEngineView
 
     WEB_ENGINE_AVAILABLE = True
@@ -28,6 +29,41 @@ except ImportError:  # pragma: no cover - depends on installed packages
     WEB_ENGINE_AVAILABLE = False
 
 MAP_HTML = Path(__file__).resolve().parents[1] / "resources" / "aoi_map.html"
+log = logging.getLogger(__name__)
+
+
+if WEB_ENGINE_AVAILABLE:
+
+    class _MapPage(QWebEnginePage):
+        """The map page: never navigates away, and keeps the console quiet.
+
+        * Link clicks (e.g. map credits) are blocked, so an accidental click cannot
+          replace the map with a website.
+        * Chromium's harmless "ResizeObserver loop" warning, raised whenever Qt resizes
+          the view during layout, is dropped; other JS messages go to ``logging``.
+        """
+
+        _BENIGN_MESSAGES = ("ResizeObserver loop",)
+
+        def acceptNavigationRequest(self, url: QUrl, nav_type, is_main_frame: bool) -> bool:  # noqa: N802
+            if nav_type == QWebEnginePage.NavigationType.NavigationTypeLinkClicked:
+                return False
+            if is_main_frame and not url.isLocalFile():
+                return False  # only the bundled aoi_map.html may be shown
+            return True
+
+        def createWindow(self, window_type):  # noqa: N802 (target="_blank" links / window.open)
+            return None
+
+        def javaScriptConsoleMessage(self, level, message: str, line: int, source: str) -> None:  # noqa: N802
+            if any(text in message for text in self._BENIGN_MESSAGES):
+                return
+            log_level = (
+                logging.WARNING
+                if level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel
+                else logging.DEBUG
+            )
+            log.log(log_level, "AOI map JS (%s:%s): %s", source, line, message)
 
 
 class _MapBridge(QObject):
@@ -93,6 +129,7 @@ class AoiMapWidget(QWidget):
         self._channel.registerObject("bridge", self._bridge)
 
         self._view = QWebEngineView(self)
+        self._view.setPage(_MapPage(self._view))
         self._view.settings().setAttribute(
             QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True
         )
@@ -100,6 +137,12 @@ class AoiMapWidget(QWidget):
         self._view.page().setWebChannel(self._channel)
         self._view.load(QUrl.fromLocalFile(str(MAP_HTML)))
         layout.addWidget(self._view)
+
+    def wheelEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        # The wheel zooms the map (Leaflet). QWebEngineView re-sends wheel events the
+        # page did not use to its parent; accept them here so the form never scrolls
+        # while the cursor is over the map.
+        event.accept()
 
     # ------------------------------------------------------------- public API
     @property
