@@ -38,9 +38,9 @@ class RequestService(IRequestService):
         if info is None:
             result.add_error("dataset", "Select a supported dataset.")
 
-        # 4. AOI (imported GeoJSON or bounding box)
+        # 4. AOI (imported GeoJSON, or a rectangle / circle / polygon drawn on the map)
         if not form.aoi:
-            result.add_error("aoi", "Specify an Area of Interest: import a GeoJSON file, or draw / enter a bounding box.")
+            result.add_error("aoi", "Specify an Area of Interest: import a GeoJSON file, or draw a rectangle, circle or polygon on the map.")
         else:
             try:
                 aoi_error = validate_geometry(json.loads(form.aoi))

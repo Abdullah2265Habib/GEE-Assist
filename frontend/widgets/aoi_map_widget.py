@@ -1,7 +1,9 @@
 """Interactive map for picking the Area of Interest.
 
-* bbox mode: the user draws a rectangle (Leaflet.draw); its bounds are
-  emitted through ``bbox_drawn``. Python can also push a bbox onto the map.
+* draw mode: the user draws a rectangle, circle or polygon (Leaflet.draw).
+  Rectangles come out as ``bbox_drawn``, circles as ``circle_drawn`` (centre +
+  radius in metres) and polygons as ``polygon_drawn`` (GeoJSON geometry text).
+  Python can also push a typed bbox onto the map as a rectangle.
 * file mode: shows the outline of an imported GeoJSON AOI.
 
 Requires PyQt6-WebEngine. Without it the widget shows a notice and the form
@@ -33,7 +35,9 @@ class _MapBridge(QObject):
 
     ready = pyqtSignal()
     bbox_drawn = pyqtSignal(float, float, float, float)
-    bbox_cleared = pyqtSignal()
+    circle_drawn = pyqtSignal(float, float, float)
+    polygon_drawn = pyqtSignal(str)
+    shape_cleared = pyqtSignal()
 
     @pyqtSlot()
     def mapReady(self) -> None:  # noqa: N802 (called from JS)
@@ -43,14 +47,24 @@ class _MapBridge(QObject):
     def bboxDrawn(self, west: float, south: float, east: float, north: float) -> None:  # noqa: N802
         self.bbox_drawn.emit(west, south, east, north)
 
+    @pyqtSlot(float, float, float)
+    def circleDrawn(self, lon: float, lat: float, radius_m: float) -> None:  # noqa: N802
+        self.circle_drawn.emit(lon, lat, radius_m)
+
+    @pyqtSlot(str)
+    def polygonDrawn(self, geometry: str) -> None:  # noqa: N802
+        self.polygon_drawn.emit(geometry)
+
     @pyqtSlot()
-    def bboxCleared(self) -> None:  # noqa: N802
-        self.bbox_cleared.emit()
+    def bboxCleared(self) -> None:  # noqa: N802 (any drawn shape was deleted)
+        self.shape_cleared.emit()
 
 
 class AoiMapWidget(QWidget):
     bbox_drawn = pyqtSignal(float, float, float, float)  # min_lon, min_lat, max_lon, max_lat
-    bbox_cleared = pyqtSignal()
+    circle_drawn = pyqtSignal(float, float, float)      # centre lon, centre lat, radius (m)
+    polygon_drawn = pyqtSignal(str)                     # GeoJSON Polygon geometry
+    shape_cleared = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -71,7 +85,9 @@ class AoiMapWidget(QWidget):
         self._bridge = _MapBridge(self)
         self._bridge.ready.connect(self._on_ready)
         self._bridge.bbox_drawn.connect(self.bbox_drawn)
-        self._bridge.bbox_cleared.connect(self.bbox_cleared)
+        self._bridge.circle_drawn.connect(self.circle_drawn)
+        self._bridge.polygon_drawn.connect(self.polygon_drawn)
+        self._bridge.shape_cleared.connect(self.shape_cleared)
 
         self._channel = QWebChannel(self)
         self._channel.registerObject("bridge", self._bridge)
@@ -91,14 +107,14 @@ class AoiMapWidget(QWidget):
         return self._view is not None
 
     def set_mode(self, mode: str) -> None:
-        """``"bbox"`` (draw rectangle) or ``"file"`` (show imported GeoJSON)."""
+        """``"draw"`` (draw a shape) or ``"file"`` (show imported GeoJSON)."""
         self._run(f"setMode({json.dumps(mode)})")
 
     def set_bbox(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float, fit: bool = True) -> None:
         self._run(f"setBbox({min_lon}, {min_lat}, {max_lon}, {max_lat}, {'true' if fit else 'false'})")
 
-    def clear_bbox(self) -> None:
-        self._run("clearBbox()")
+    def clear_shape(self) -> None:
+        self._run("clearShape()")
 
     def show_geojson(self, geojson: str) -> None:
         self._run(f"showGeoJSON({json.dumps(geojson)})")
