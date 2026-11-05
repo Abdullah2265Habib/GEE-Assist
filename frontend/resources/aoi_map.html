@@ -36,21 +36,31 @@
   ).addTo(map);
   L.control.scale().addTo(map);
 
-  // Layers: user-drawn rectangle (bbox mode) and imported GeoJSON outline (file mode)
+  // Layers: user-drawn shape (draw mode) and imported GeoJSON outline (file mode)
   var drawn = new L.FeatureGroup().addTo(map);
   var footprint = L.geoJSON(null, { style: { color: '#e67e22', weight: 2, fillOpacity: 0.15 } }).addTo(map);
-  var rectStyle = { color: '#2e86de', weight: 2, fillOpacity: 0.15 };
+  var shapeStyle = { color: '#2E9E78', weight: 2, fillOpacity: 0.15 };
 
   var drawControl = new L.Control.Draw({
-    draw: { rectangle: { shapeOptions: rectStyle }, polygon: false, polyline: false,
-            circle: false, marker: false, circlemarker: false },
+    draw: {
+      rectangle: { shapeOptions: shapeStyle },
+      circle: { shapeOptions: shapeStyle, showRadius: true, metric: true },
+      polygon: {
+        shapeOptions: shapeStyle,
+        allowIntersection: false,   // GEE rejects self-intersecting AOIs
+        showArea: true,
+        metric: true,
+        drawError: { color: '#C0392B', message: 'Polygon edges cannot cross.' }
+      },
+      polyline: false, marker: false, circlemarker: false
+    },
     edit: { featureGroup: drawn }
   });
 
   var hint = L.control({ position: 'bottomleft' });
   hint.onAdd = function () {
     var div = L.DomUtil.create('div', 'hint');
-    div.innerHTML = 'Use the &#9645; tool (top-left) to draw the bounding box.';
+    div.innerHTML = 'Draw a rectangle, circle or polygon with the tools (top-left).';
     return div;
   };
 
@@ -60,18 +70,26 @@
     bridge.mapReady();
   });
 
-  function emitBounds(layer) {
+  // Rectangle extends Polygon, so it must be tested first.
+  function emitShape(layer) {
     if (!bridge) return;
-    var b = layer.getBounds();
-    bridge.bboxDrawn(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+    if (layer instanceof L.Circle) {
+      var c = layer.getLatLng();
+      bridge.circleDrawn(c.lng, c.lat, layer.getRadius());
+    } else if (layer instanceof L.Rectangle) {
+      var b = layer.getBounds();
+      bridge.bboxDrawn(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+    } else if (layer instanceof L.Polygon) {
+      bridge.polygonDrawn(JSON.stringify(layer.toGeoJSON().geometry));
+    }
   }
 
   map.on(L.Draw.Event.CREATED, function (e) {
-    drawn.clearLayers();
+    drawn.clearLayers();          // one AOI at a time
     drawn.addLayer(e.layer);
-    emitBounds(e.layer);
+    emitShape(e.layer);
   });
-  map.on(L.Draw.Event.EDITED, function (e) { e.layers.eachLayer(emitBounds); });
+  map.on(L.Draw.Event.EDITED, function (e) { e.layers.eachLayer(emitShape); });
   map.on(L.Draw.Event.DELETED, function () { if (bridge) bridge.bboxCleared(); });
 
   // ---- called from Python ----
@@ -79,7 +97,7 @@
   function setMode(newMode) {
     if (newMode === mode) return;
     mode = newMode;
-    if (mode === 'bbox') {
+    if (mode === 'draw') {
       map.addControl(drawControl);
       hint.addTo(map);
       map.removeLayer(footprint);
@@ -94,12 +112,12 @@
 
   function setBbox(west, south, east, north, fit) {
     drawn.clearLayers();
-    var rect = L.rectangle([[south, west], [north, east]], rectStyle);
+    var rect = L.rectangle([[south, west], [north, east]], shapeStyle);
     drawn.addLayer(rect);
     if (fit) map.fitBounds(rect.getBounds(), { maxZoom: 14 });
   }
 
-  function clearBbox() { drawn.clearLayers(); }
+  function clearShape() { drawn.clearLayers(); }
 
   function showGeoJSON(text) {
     footprint.clearLayers();

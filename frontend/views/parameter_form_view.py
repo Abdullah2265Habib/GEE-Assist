@@ -40,31 +40,27 @@ from backend.config import (
 from backend.dto import FormDTO, ValidationDTO
 from backend.exceptions import GeeAssistError
 from frontend import form_theme as theme
+from frontend.aoi_geometry import (
+    bbox_of,
+    bbox_polygon,
+    circle_polygon,
+    format_distance,
+    polygon_from_geojson,
+    vertex_count,
+)
 from frontend.widgets.aoi_map_widget import AoiMapWidget
 
 ERROR_STYLE = f"color: {theme.ERROR};"
 SUCCESS_STYLE = f"color: {theme.SUCCESS}; font-weight: 600;"
 HINT_STYLE = f"color: {theme.MUTED}; font-size: 9pt;"
 
-AOI_FILE, AOI_BBOX = 0, 1
+AOI_FILE, AOI_DRAW = 0, 1
+NO_SHAPE_TEXT = "No shape drawn yet."
 
 
 # ---------------------------------------------------------------------- helpers
 def _qdate(value) -> QDate:
     return QDate(value.year, value.month, value.day)
-
-
-def _bbox_polygon(min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> str:
-    ring = [[min_lon, min_lat], [max_lon, min_lat], [max_lon, max_lat], [min_lon, max_lat], [min_lon, min_lat]]
-    return json.dumps({"type": "Polygon", "coordinates": [ring]})
-
-
-def _bbox_of(geometry: dict) -> list[float]:
-    coords = geometry["coordinates"]
-    polygons = [coords] if geometry["type"] == "Polygon" else coords
-    points = [p for poly in polygons for ring in poly for p in ring]
-    lons, lats = [p[0] for p in points], [p[1] for p in points]
-    return [min(lons), min(lats), max(lons), max(lats)]
 
 
 def _checked_items(widget: QListWidget) -> list[str]:
@@ -104,6 +100,8 @@ class ParameterFormView(QWidget):
         self._facade = facade
         self._imported_aoi: str = ""
         self._imported_name: str = ""
+        self._drawn_aoi: str = ""  # GeoJSON of the rectangle / circle / polygon on the map
+        self._drawn_name: str = ""
         self._error_labels: dict[str, QLabel] = {}
 
         self.setObjectName("ParameterForm")
@@ -154,7 +152,9 @@ class ParameterFormView(QWidget):
         self._aoi_mode.idClicked.connect(self._on_aoi_mode_changed)
         self.import_button.clicked.connect(self._on_import_geojson)
         self.map_widget.bbox_drawn.connect(self._on_map_bbox_drawn)
-        self.map_widget.bbox_cleared.connect(self._on_map_bbox_cleared)
+        self.map_widget.circle_drawn.connect(self._on_map_circle_drawn)
+        self.map_widget.polygon_drawn.connect(self._on_map_polygon_drawn)
+        self.map_widget.shape_cleared.connect(self._on_map_shape_cleared)
         for spin in self._bbox_spins:
             spin.editingFinished.connect(self._on_bbox_typed)
         self.reset_button.clicked.connect(self.reset)
@@ -228,15 +228,15 @@ class ParameterFormView(QWidget):
         group = QGroupBox("2. Area of Interest")
         layout = QVBoxLayout(group)
 
-        # Either a GeoJSON file OR a bounding box (drawn on the map or typed in).
+        # Either a GeoJSON file OR a shape drawn on the map (rectangle, circle, polygon).
         self.aoi_file_radio = QRadioButton("GeoJSON file")
-        self.aoi_bbox_radio = QRadioButton("Bounding box (draw on map or enter coordinates)")
+        self.aoi_draw_radio = QRadioButton("Draw on map (rectangle, circle or polygon)")
         self._aoi_mode = QButtonGroup(self)
         self._aoi_mode.addButton(self.aoi_file_radio, AOI_FILE)
-        self._aoi_mode.addButton(self.aoi_bbox_radio, AOI_BBOX)
+        self._aoi_mode.addButton(self.aoi_draw_radio, AOI_DRAW)
         modes = QHBoxLayout()
         modes.addWidget(self.aoi_file_radio)
-        modes.addWidget(self.aoi_bbox_radio)
+        modes.addWidget(self.aoi_draw_radio)
         modes.addStretch(1)
 
         self.map_widget = AoiMapWidget()
@@ -252,11 +252,18 @@ class ParameterFormView(QWidget):
         file_layout.addWidget(self.import_button)
         file_layout.addWidget(self.aoi_file_label, 1)
 
-        # page 1: bounding box coordinates (kept in sync with the map rectangle)
+        # page 1: drawn shape summary + bounding box (the shape's extent; typing
+        # coordinates replaces the shape with that rectangle)
         bbox_page = QWidget()
         bbox_layout = QVBoxLayout(bbox_page)
         bbox_layout.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel("Draw a rectangle on the map, or type the coordinates (WGS84 degrees):")
+        self.shape_label = QLabel(NO_SHAPE_TEXT)
+        self.shape_label.setWordWrap(True)
+        hint = QLabel(
+            "Pick a tool at the top-left of the map to draw a rectangle, circle or polygon. "
+            "The boxes below show the shape's extent (WGS84 degrees); typing values draws that rectangle instead."
+        )
+        hint.setWordWrap(True)
         hint.setStyleSheet(HINT_STYLE)
         grid = QGridLayout()
 
@@ -278,6 +285,7 @@ class ParameterFormView(QWidget):
         grid.addWidget(self.min_lat_spin, 1, 1)
         grid.addWidget(QLabel("North (max lat):"), 1, 2)
         grid.addWidget(self.max_lat_spin, 1, 3)
+        bbox_layout.addWidget(self.shape_label)
         bbox_layout.addWidget(hint)
         bbox_layout.addLayout(grid)
 
@@ -338,8 +346,8 @@ class ParameterFormView(QWidget):
         self._imported_name = ""
         self.aoi_file_label.setText("No file imported.")
         self.map_widget.show_geojson("")
-        self._set_bbox_spins(0.0, 0.0, 0.0, 0.0)
-        self.map_widget.clear_bbox()
+        self._clear_drawn_shape()
+        self.map_widget.clear_shape()
         self.aoi_file_radio.setChecked(True)
         self._on_aoi_mode_changed(AOI_FILE)
 
@@ -414,7 +422,7 @@ class ParameterFormView(QWidget):
     # ------------------------------------------------------------------- AOI
     def _on_aoi_mode_changed(self, mode: int) -> None:
         self.aoi_stack.setCurrentIndex(mode)
-        self.map_widget.set_mode("bbox" if mode == AOI_BBOX else "file")
+        self.map_widget.set_mode("draw" if mode == AOI_DRAW else "file")
         self._set_field_error("aoi", "")
 
     def _on_import_geojson(self) -> None:
@@ -435,7 +443,7 @@ class ParameterFormView(QWidget):
         self._imported_aoi = aoi
         self._imported_name = Path(path).name
         geometry = json.loads(aoi)
-        min_lon, min_lat, max_lon, max_lat = _bbox_of(geometry)
+        min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
         self.aoi_file_label.setText(
             f"<b>{self._imported_name}</b> · {geometry['type']}<br>"
             f"Extent: lon {min_lon:.4f} → {max_lon:.4f}, lat {min_lat:.4f} → {max_lat:.4f}"
@@ -453,16 +461,58 @@ class ParameterFormView(QWidget):
         lon_a, lat_a, lon_b, lat_b = (s.value() for s in self._bbox_spins)
         return min(lon_a, lon_b), min(lat_a, lat_b), max(lon_a, lon_b), max(lat_a, lat_b)
 
-    def _on_map_bbox_drawn(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> None:
-        self._set_bbox_spins(max(min_lon, -180), max(min_lat, -90), min(max_lon, 180), min(max_lat, 90))
+    def _set_drawn_shape(self, geometry: dict, name: str, summary: str, sync_spins: bool = True) -> None:
+        self._drawn_aoi = json.dumps(geometry)
+        self._drawn_name = name
+        self.shape_label.setText(summary)
+        if sync_spins:
+            min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
+            self._set_bbox_spins(max(min_lon, -180), max(min_lat, -90), min(max_lon, 180), min(max_lat, 90))
         self._set_field_error("aoi", "")
 
-    def _on_map_bbox_cleared(self) -> None:
+    def _clear_drawn_shape(self) -> None:
+        self._drawn_aoi = ""
+        self._drawn_name = ""
+        self.shape_label.setText(NO_SHAPE_TEXT)
         self._set_bbox_spins(0.0, 0.0, 0.0, 0.0)
+
+    def _on_map_bbox_drawn(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> None:
+        min_lon, min_lat = max(min_lon, -180), max(min_lat, -90)
+        max_lon, max_lat = min(max_lon, 180), min(max_lat, 90)
+        self._set_drawn_shape(
+            bbox_polygon(min_lon, min_lat, max_lon, max_lat), "Rectangle", "<b>Rectangle</b> drawn on the map."
+        )
+
+    def _on_map_circle_drawn(self, lon: float, lat: float, radius_m: float) -> None:
+        radius = format_distance(radius_m)
+        self._set_drawn_shape(
+            circle_polygon(lon, lat, radius_m),
+            f"Circle (r = {radius})",
+            f"<b>Circle</b> · centre {lon:.4f}, {lat:.4f} · radius {radius}",
+        )
+
+    def _on_map_polygon_drawn(self, geometry_text: str) -> None:
+        try:
+            geometry = polygon_from_geojson(geometry_text)
+            vertices = vertex_count(geometry)
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+            self._clear_drawn_shape()
+            self._set_field_error("aoi", "Could not read the polygon drawn on the map. Please draw it again.")
+            return
+        self._set_drawn_shape(geometry, f"Polygon ({vertices} vertices)", f"<b>Polygon</b> · {vertices} vertices")
+
+    def _on_map_shape_cleared(self) -> None:
+        self._clear_drawn_shape()
 
     def _on_bbox_typed(self) -> None:
         min_lon, min_lat, max_lon, max_lat = self._bbox_values()
         if min_lon < max_lon and min_lat < max_lat:
+            self._set_drawn_shape(
+                bbox_polygon(min_lon, min_lat, max_lon, max_lat),
+                "Rectangle",
+                "<b>Rectangle</b> from the typed coordinates.",
+                sync_spins=False,
+            )
             self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
 
     # ---------------------------------------------------------------- submit
@@ -471,10 +521,7 @@ class ParameterFormView(QWidget):
         if self.aoi_file_radio.isChecked():
             aoi, aoi_name = self._imported_aoi, self._imported_name
         else:
-            min_lon, min_lat, max_lon, max_lat = self._bbox_values()
-            has_area = min_lon < max_lon and min_lat < max_lat
-            aoi = _bbox_polygon(min_lon, min_lat, max_lon, max_lat) if has_area else ""
-            aoi_name = "Bounding box"
+            aoi, aoi_name = self._drawn_aoi, self._drawn_name
 
         return FormDTO(
             dataset=self.dataset_combo.currentData() or "",
