@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import dataclass
 from typing import Any
 
 EARTH_RADIUS_M = 6_371_008.8
@@ -64,3 +65,45 @@ def vertex_count(geometry: dict[str, Any]) -> int:
 
 def format_distance(metres: float) -> str:
     return f"{metres / 1000:.2f} km" if metres >= 1000 else f"{metres:.0f} m"
+
+
+# ----------------------------------------------------------------------------- download estimate
+METRES_PER_DEGREE_LAT = 110_574.0
+METRES_PER_DEGREE_LON_EQUATOR = 111_320.0
+
+
+@dataclass(frozen=True)
+class DownloadEstimate:
+    width_px: int
+    height_px: int
+    total_bytes: int
+    requests: int   # GEE download requests (tiles) needed to stay under the per-request limits
+
+
+def estimate_download(
+    geometry: dict[str, Any],
+    scale_m: float,
+    band_count: int,
+    bytes_per_pixel: int,
+    max_request_bytes: int,
+    max_dimension: int,
+) -> DownloadEstimate:
+    """Rough size of the GeoTIFF GEE will produce for the geometry's bounding box."""
+    min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
+    mid_lat = math.radians((min_lat + max_lat) / 2)
+    width_m = (max_lon - min_lon) * METRES_PER_DEGREE_LON_EQUATOR * math.cos(mid_lat)
+    height_m = (max_lat - min_lat) * METRES_PER_DEGREE_LAT
+    width_px = max(1, math.ceil(width_m / scale_m))
+    height_px = max(1, math.ceil(height_m / scale_m))
+    total = width_px * height_px * max(band_count, 1) * bytes_per_pixel
+    by_size = math.ceil(total / max_request_bytes)
+    by_dimension = math.ceil(width_px / max_dimension) * math.ceil(height_px / max_dimension)
+    return DownloadEstimate(width_px, height_px, total, max(1, by_size, by_dimension))
+
+
+def format_bytes(count: float) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if count < 1024 or unit == "GB":
+            return f"{count:.0f} {unit}" if unit == "B" else f"{count:.1f} {unit}"
+        count /= 1024
+    return f"{count:.1f} TB"
