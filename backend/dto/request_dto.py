@@ -29,8 +29,12 @@ class FormDTO:
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
-    # --- what for ---
-    analysis_type: str = ""                             # Water | Vegetation | LST | LULC
+    # --- how to save it (download) ---
+    crs: str = "EPSG:4326"                              # output projection; "AUTO_UTM" is resolved on validation
+    output_dir: str = ""                                # folder the GeoTIFF(s) are written to
+
+    # --- what for (optional: empty = download only) ---
+    analysis_type: str = ""                             # "" | Water | Vegetation | LST | LULC
     processes: list[str] = field(default_factory=list)  # e.g. NDVI, EVI
 
     # --- origin ---
