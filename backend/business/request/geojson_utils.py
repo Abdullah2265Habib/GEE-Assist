@@ -100,6 +100,17 @@ def geometry_bbox(geometry: dict[str, Any]) -> list[float]:
     return [min(lons), min(lats), max(lons), max(lats)]
 
 
+def utm_epsg_for(geometry: dict[str, Any]) -> str:
+    """EPSG code of the WGS 84 UTM zone containing the centre of the geometry's extent.
+
+    e.g. Faisalabad (73.1 E, 31.4 N) -> zone 43 North -> "EPSG:32643".
+    """
+    min_lon, min_lat, max_lon, max_lat = geometry_bbox(geometry)
+    lon, lat = (min_lon + max_lon) / 2, (min_lat + max_lat) / 2
+    zone = min(int((lon + 180) // 6) + 1, 60)
+    return f"EPSG:{32600 + zone if lat >= 0 else 32700 + zone}"
+
+
 def _validate_ring(ring: Any) -> str | None:
     if not isinstance(ring, list) or len(ring) < 4:
         return "Each polygon ring needs at least 4 positions."
