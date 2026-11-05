@@ -39,11 +39,12 @@ from backend.config import (
 )
 from backend.dto import FormDTO, ValidationDTO
 from backend.exceptions import GeeAssistError
+from frontend import form_theme as theme
 from frontend.widgets.aoi_map_widget import AoiMapWidget
 
-ERROR_STYLE = "color: #c0392b;"
-SUCCESS_STYLE = "color: #1e8449; font-weight: bold;"
-HINT_STYLE = "color: gray;"
+ERROR_STYLE = f"color: {theme.ERROR};"
+SUCCESS_STYLE = f"color: {theme.SUCCESS}; font-weight: 600;"
+HINT_STYLE = f"color: {theme.MUTED}; font-size: 9pt;"
 
 AOI_FILE, AOI_BBOX = 0, 1
 
@@ -105,8 +106,15 @@ class ParameterFormView(QWidget):
         self._imported_name: str = ""
         self._error_labels: dict[str, QLabel] = {}
 
+        self.setObjectName("ParameterForm")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(theme.FORM_STYLESHEET)
+
         content = QWidget()
+        content.setObjectName("ParameterFormContent")
         content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(18, 8, 18, 18)
+        content_layout.setSpacing(10)
         content_layout.addWidget(self._build_dataset_group())
         content_layout.addWidget(self._build_aoi_group())
         content_layout.addWidget(self._build_time_group())
@@ -121,16 +129,25 @@ class ParameterFormView(QWidget):
         self.status_label.setWordWrap(True)
         self.reset_button = QPushButton("Reset")
         self.submit_button = QPushButton("Submit Parameters")
+        self.submit_button.setObjectName("PrimaryButton")
         self.submit_button.setDefault(True)
+        for button in (self.reset_button, self.submit_button):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        buttons = QHBoxLayout()
+        action_bar = QWidget()
+        action_bar.setObjectName("FormActionBar")
+        action_bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        buttons = QHBoxLayout(action_bar)
+        buttons.setContentsMargins(18, 10, 18, 10)
         buttons.addWidget(self.status_label, 1)
         buttons.addWidget(self.reset_button)
         buttons.addWidget(self.submit_button)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(scroll, 1)
-        layout.addLayout(buttons)
+        layout.addWidget(action_bar)
 
         self.dataset_combo.currentIndexChanged.connect(self._on_dataset_changed)
         self.analysis_combo.currentIndexChanged.connect(self._on_analysis_changed)

@@ -10,13 +10,14 @@ except ImportError:
     pass
 
 from backend.bootstrap import build_business_facade
+from frontend.form_theme import apply_light_mode
 from frontend.views.main_window import MainWindow
 
 
 def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("GEE-Assist")
-    app.setStyle("Fusion")
+    apply_light_mode(app)
 
     window = MainWindow(build_business_facade())
     window.show()
