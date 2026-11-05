@@ -95,27 +95,37 @@ FORM_STYLESHEET = f"""
 #ParameterForm QWidget {{ font-family: "{SANS}"; font-size: 10pt; color: {TEXT}; }}
 QToolTip {{ background: {WHITE}; color: {INK}; border: 1px solid {BORDER}; padding: 4px 6px; }}
 
-/* ---- section cards: tinted header band with the heading, white body below ---- */
+/* ---- page heading (same look as the sign-in card title) ---- */
+#ParameterForm QLabel#PageTitle {{ font-family: "{SERIF}"; font-size: 20pt; color: {INK}; }}
+#ParameterForm QLabel#PageSubtitle {{ color: {MUTED}; font-size: 10pt; }}
+
+/* ---- section cards: white card, serif title + muted subtitle, thin divider ---- */
 QFrame#SectionCard {{
     background: {WHITE};
-    border: 1px solid {BORDER_STRONG};
-    border-radius: 12px;
+    border: 1px solid {BORDER};
+    border-radius: 14px;
 }}
 QFrame#SectionCard QWidget {{ background: transparent; }}
-#ParameterForm QFrame#SectionHeader {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {HEADER_GREEN}, stop:1 {HEADER_BLUE});
-    border: none;
-    border-bottom: 1px solid {HEADER_LINE};
-    border-top-left-radius: 11px;
-    border-top-right-radius: 11px;
-}}
 #ParameterForm QLabel#SectionTitle {{
     font-family: "{SERIF}";
     font-size: 13.5pt;
-    font-weight: bold;
     color: {INK};
-    background: transparent;
 }}
+#ParameterForm QLabel#SectionSubtitle {{ color: {MUTED}; font-size: 9pt; }}
+#ParameterForm QFrame#Divider {{ background: {BORDER}; border: none; }}
+
+/* ---- field labels / hints / errors (sign-in FormField style) ---- */
+#ParameterForm QLabel#FieldLabel {{ color: {INK}; font-weight: 600; font-size: 9.5pt; }}
+#ParameterForm QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
+#ParameterForm QLabel#FieldError {{ color: {ERROR}; font-size: 8.5pt; }}
+
+/* ---- status banners in the action bar ---- */
+QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
+    border-radius: 8px; padding: 7px 12px; font-size: 9.5pt;
+}}
+QLabel#ErrorBanner {{ background: #FDF1EF; color: {ERROR}; border: 1px solid #F3C9C3; }}
+QLabel#SuccessBanner {{ background: #ECF7F1; color: {SUCCESS}; border: 1px solid #BFE3D1; }}
+QLabel#InfoBanner {{ background: #EEF5FB; color: {OCEAN_DARK}; border: 1px solid #C9DFF1; }}
 
 /* ---- text ---- */
 QLabel {{ color: {TEXT}; background: transparent; }}
@@ -136,11 +146,24 @@ QRadioButton::indicator:checked {{
     background: {FIELD_BG};
     color: {INK};
     border: 1px solid {BORDER_STRONG};
-    border-radius: 7px;
-    padding: 5px 9px;
-    min-height: 20px;
+    border-radius: 9px;
+    padding: 6px 11px;
+    min-height: 22px;
     selection-background-color: {OCEAN};
     selection-color: {WHITE};
+}}
+QLineEdit#PathField {{
+    background: {FIELD_BG}; color: {INK};
+    border: 1px solid {BORDER_STRONG}; border-radius: 9px;
+    padding: 6px 11px; min-height: 22px;
+    selection-background-color: {OCEAN}; selection-color: {WHITE};
+}}
+QLineEdit#PathField:hover {{ border-color: {BORDER_HOVER}; }}
+QLineEdit#PathField:focus {{ border: 1px solid {LEAF}; background: {WHITE}; }}
+QLineEdit#PathField[invalid="true"],
+QComboBox[invalid="true"], QSpinBox[invalid="true"], QDoubleSpinBox[invalid="true"],
+QDateEdit[invalid="true"], QWidget#CheckGrid[invalid="true"] {{
+    border: 1.5px solid {ERROR}; background: #FFFBFA;
 }}
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {{ border-color: {BORDER_HOVER}; }}
 QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {{
@@ -173,7 +196,52 @@ QComboBox QAbstractItemView {{
     outline: none;
 }}
 
-/* ---- check lists (bands, processes) ---- */
+/* ---- multi-select drop-down (bands): checkboxes inside the popup ---- */
+QComboBox QAbstractItemView::item {{ padding: 5px 8px; min-height: 22px; }}
+QComboBox QAbstractItemView::item:hover {{ background: {FOAM}; }}
+QComboBox QAbstractItemView::indicator {{
+    width: 15px; height: 15px; border-radius: 4px;
+    border: 1px solid {BORDER_STRONG}; background: {WHITE};
+}}
+QComboBox QAbstractItemView::indicator:hover {{ border-color: {LEAF}; }}
+QComboBox QAbstractItemView::indicator:checked {{
+    background: {LEAF}; border-color: {LEAF}; image: url("{CHECK_ICON}");
+}}
+
+/* ---- checkbox grids (processes) ---- */
+QWidget#CheckGrid {{
+    background: {FIELD_BG};
+    border: 1px solid {BORDER};
+    border-radius: 9px;
+}}
+#ParameterForm QCheckBox {{ color: {INK}; spacing: 8px; background: transparent; }}
+#ParameterForm QCheckBox:disabled {{ color: {SUBTLE}; }}
+#ParameterForm QCheckBox::indicator {{
+    width: 16px; height: 16px; border-radius: 4px;
+    border: 1px solid {BORDER_STRONG}; background: {WHITE};
+}}
+#ParameterForm QCheckBox::indicator:hover {{ border-color: {LEAF}; }}
+#ParameterForm QCheckBox::indicator:checked {{
+    background: {LEAF}; border-color: {LEAF}; image: url("{CHECK_ICON}");
+}}
+#ParameterForm QCheckBox::indicator:disabled {{ background: {DISABLED_BG}; border-color: {BORDER}; }}
+
+/* ---- segmented toggle (AOI source) ---- */
+QPushButton#SegmentButton {{
+    color: {TEXT}; background: {WHITE}; border: 1px solid {BORDER_STRONG};
+    border-radius: 0px; padding: 7px 18px; font-weight: 600;
+}}
+QPushButton#SegmentButton[segment="first"] {{ border-top-left-radius: 9px; border-bottom-left-radius: 9px; }}
+QPushButton#SegmentButton[segment="last"] {{
+    border-top-right-radius: 9px; border-bottom-right-radius: 9px; border-left: none;
+}}
+QPushButton#SegmentButton:hover {{ background: {FOAM}; }}
+QPushButton#SegmentButton:checked {{
+    color: {WHITE}; border-color: {LEAF};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+}}
+
+/* ---- check lists ---- */
 QListWidget {{
     background: {FIELD_BG};
     border: 1px solid {BORDER_STRONG};
@@ -213,12 +281,19 @@ QPushButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
 QPushButton:pressed {{ background: {MINT}; }}
 QPushButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton#PrimaryButton {{
-    color: {WHITE}; border: none; padding: 8px 20px;
+    color: {WHITE}; border: none; padding: 9px 22px; border-radius: 9px; font-size: 10.5pt;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
 }}
 QPushButton#PrimaryButton:hover {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
 }}
+QPushButton#PrimaryButton:pressed {{ padding-top: 10px; padding-bottom: 8px; }}
+QPushButton#SecondaryButton {{
+    color: {INK}; background: {WHITE}; border: 1px solid {BORDER_STRONG};
+    border-radius: 9px; padding: 8px 18px; font-size: 10.5pt;
+}}
+QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
+QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 
 /* ---- bottom action bar ---- */
 #FormActionBar {{ background: {WHITE}; border-top: 1px solid {BORDER}; }}
