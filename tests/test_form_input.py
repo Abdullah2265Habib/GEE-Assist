@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
 from backend.business.request import RequestService
-from backend.config import ANALYSIS_CATEGORIES, DATASETS
+from backend.business.request.geojson_utils import utm_epsg_for
+from backend.config import ANALYSIS_CATEGORIES, AUTO_UTM, DATASETS
 from backend.dto import FormDTO
 from backend.exceptions import AOIImportError
 
@@ -28,11 +30,16 @@ def valid_form(**overrides) -> FormDTO:
         aoi=json.dumps(SQUARE),
         start_date=date(2024, 1, 1),
         end_date=date(2024, 3, 31),
+        crs="EPSG:4326",
+        output_dir=str(OUTPUT_DIR),
         analysis_type="Vegetation",
         processes=["NDVI"],
     )
     values.update(overrides)
     return FormDTO(**values)
+
+
+OUTPUT_DIR = Path(__file__).resolve().parent / "_downloads_not_created"
 
 
 # ---------------------------------------------------------------- validate_form
@@ -58,7 +65,11 @@ def test_valid_form_is_accepted_and_kept():
         ({"scale": 0}, "scale"),
         ({"max_cloud_cover": 150}, "max_cloud_cover"),
         ({"composite": "sum"}, "composite"),
-        ({"analysis_type": ""}, "analysis_type"),
+        ({"crs": "WGS84"}, "crs"),
+        ({"crs": ""}, "crs"),
+        ({"output_dir": ""}, "output_dir"),
+        ({"output_dir": "relative/folder"}, "output_dir"),
+        ({"output_dir": __file__}, "output_dir"),                            # a file, not a folder
         ({"analysis_type": "LST", "processes": ["LSTMapping"]}, "analysis_type"),  # 8c
         ({"processes": []}, "processes"),
         ({"processes": ["NDWI"]}, "processes"),
@@ -70,6 +81,29 @@ def test_invalid_form_reports_field_and_is_not_kept(overrides, field):
     assert not result.is_valid
     assert field in result.errors
     assert service.get_kept_requests() == []
+
+
+def test_download_only_needs_no_analysis():
+    service = RequestService()
+    result = service.validate_form(valid_form(analysis_type="", processes=["NDVI"]))
+    assert result.is_valid, result.errors
+    kept = service.get_kept_requests()[0]
+    assert kept.analysis_type == "" and kept.processes == []   # stray processes are dropped
+
+
+def test_auto_utm_is_resolved_from_the_aoi():
+    service = RequestService()
+    assert service.validate_form(valid_form(crs=AUTO_UTM)).is_valid
+    assert service.get_kept_requests()[0].crs == "EPSG:32643"            # 73 E, 31 N -> zone 43 N
+
+
+@pytest.mark.parametrize(
+    "lon, lat, expected",
+    [(73.05, 31.4, "EPSG:32643"), (-0.1, 51.5, "EPSG:32630"), (151.2, -33.9, "EPSG:32756"), (180.0, 0.0, "EPSG:32660")],
+)
+def test_utm_zone_lookup(lon, lat, expected):
+    point_box = {"type": "Polygon", "coordinates": [[[lon, lat], [lon, lat + 0.01], [lon - 0.01, lat], [lon, lat]]]}
+    assert utm_epsg_for(point_box) == expected
 
 
 def test_end_date_after_discontinued_dataset_rejected():
