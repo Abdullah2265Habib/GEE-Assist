@@ -75,3 +75,34 @@ def test_polygon_from_feature_unwraps_geometry():
 @pytest.mark.parametrize("metres, text", [(850, "850 m"), (1_000, "1.00 km"), (12_345, "12.35 km")])
 def test_format_distance(metres, text):
     assert format_distance(metres) == text
+
+
+# ----------------------------------------------------------------------------- download estimate
+from frontend.aoi_geometry import estimate_download, format_bytes  # noqa: E402
+
+MB = 1024 * 1024
+
+
+def test_estimate_small_aoi_fits_in_one_request():
+    box = bbox_polygon(73.0, 31.4, 73.05, 31.45)          # ~4.7 x 5.5 km
+    est = estimate_download(box, 10, 5, 4, 48 * MB, 32_768)
+    assert 450 < est.width_px < 500 and 540 < est.height_px < 570
+    assert est.total_bytes == est.width_px * est.height_px * 5 * 4
+    assert est.requests == 1
+
+
+def test_estimate_large_aoi_needs_several_requests():
+    box = bbox_polygon(73.0, 31.0, 74.0, 32.0)            # ~95 x 110 km at 10 m, 5 bands -> ~2 GB
+    est = estimate_download(box, 10, 5, 4, 48 * MB, 32_768)
+    assert est.requests == math.ceil(est.total_bytes / (48 * MB)) > 30
+
+
+def test_estimate_respects_the_pixel_dimension_limit():
+    box = bbox_polygon(60.0, 20.0, 80.0, 21.0)            # very wide, 1 band, 1 byte
+    est = estimate_download(box, 10, 1, 1, 10**12, 32_768)
+    assert est.width_px > 32_768 and est.requests >= math.ceil(est.width_px / 32_768)
+
+
+@pytest.mark.parametrize("count, text", [(512, "512 B"), (2048, "2.0 KB"), (5 * MB, "5.0 MB"), (3 * 1024 * MB, "3.0 GB")])
+def test_format_bytes(count, text):
+    assert format_bytes(count) == text
