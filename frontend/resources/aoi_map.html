@@ -29,6 +29,9 @@
       { maxZoom: 19 });
 
   var map = L.map('map', { worldCopyJump: true }).setView([30.4, 69.3], 5);
+  // Drop the "Leaflet" link from the credits (an accidental click left the map page).
+  // The Esri tile credit stays: it is required by Esri's terms and is plain text.
+  map.attributionControl.setPrefix(false);
   streets.addTo(map);
   L.control.layers(
       { 'Streets': streets, 'Satellite': imagery },
