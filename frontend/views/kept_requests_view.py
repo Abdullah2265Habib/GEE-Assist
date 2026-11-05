@@ -12,7 +12,8 @@ def _summary(index: int, form: FormDTO) -> str:
         text = form.query_text if len(form.query_text) <= 40 else form.query_text[:37] + "..."
         return f"#{index}  [Query]  {text}"
     period = f"{form.start_date} → {form.end_date}"
-    return f"#{index}  [Form]  {form.dataset} · {form.analysis_type} · {period}"
+    purpose = form.analysis_type or "download only"
+    return f"#{index}  [Form]  {form.dataset} · {purpose} · {period}"
 
 
 class KeptRequestsView(QWidget):
