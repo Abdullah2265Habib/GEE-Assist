@@ -15,8 +15,9 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QGridLayout,
-    QGroupBox,
+    QFrame,
     QHBoxLayout,
+    QLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -59,6 +60,33 @@ NO_SHAPE_TEXT = "No shape drawn yet."
 
 
 # ---------------------------------------------------------------------- helpers
+def _section(title: str, body: QLayout) -> QFrame:
+    """White card: a tinted full-width header band holding the heading, then the section's fields."""
+    card = QFrame()
+    card.setObjectName("SectionCard")
+    layout = QVBoxLayout(card)
+    layout.setContentsMargins(1, 1, 1, 1)  # keep the header band inside the card's border
+    layout.setSpacing(0)
+
+    header = QFrame()
+    header.setObjectName("SectionHeader")
+    header_layout = QHBoxLayout(header)
+    header_layout.setContentsMargins(20, 10, 20, 10)
+    heading = QLabel(title)
+    heading.setObjectName("SectionTitle")
+    header_layout.addWidget(heading)
+    header_layout.addStretch(1)
+
+    content = QWidget()
+    content.setObjectName("SectionBody")
+    body.setContentsMargins(20, 14, 20, 18)
+    content.setLayout(body)
+
+    layout.addWidget(header)
+    layout.addWidget(content)
+    return card
+
+
 def _qdate(value) -> QDate:
     return QDate(value.year, value.month, value.day)
 
@@ -171,9 +199,8 @@ class ParameterFormView(QWidget):
         self._error_labels[key] = label
         return label
 
-    def _build_dataset_group(self) -> QGroupBox:
-        group = QGroupBox("1. Dataset")
-        form = QFormLayout(group)
+    def _build_dataset_group(self) -> QFrame:
+        form = QFormLayout()
 
         # Datasets grouped under non-selectable category headers.
         self.dataset_combo = QComboBox()
@@ -222,11 +249,10 @@ class ParameterFormView(QWidget):
         form.addRow("", self._error_label("max_cloud_cover"))
         form.addRow("Composite:", self.composite_combo)
         form.addRow("", self._error_label("composite"))
-        return group
+        return _section("Dataset", form)
 
-    def _build_aoi_group(self) -> QGroupBox:
-        group = QGroupBox("2. Area of Interest")
-        layout = QVBoxLayout(group)
+    def _build_aoi_group(self) -> QFrame:
+        layout = QVBoxLayout()
 
         # Either a GeoJSON file OR a shape drawn on the map (rectangle, circle, polygon).
         self.aoi_file_radio = QRadioButton("GeoJSON file")
@@ -297,11 +323,10 @@ class ParameterFormView(QWidget):
         layout.addWidget(self.map_widget)
         layout.addWidget(self.aoi_stack)
         layout.addWidget(self._error_label("aoi"))
-        return group
+        return _section("Area of Interest", layout)
 
-    def _build_time_group(self) -> QGroupBox:
-        group = QGroupBox("3. Time Range")
-        form = QFormLayout(group)
+    def _build_time_group(self) -> QFrame:
+        form = QFormLayout()
 
         def date_edit() -> QDateEdit:
             edit = QDateEdit()
@@ -314,11 +339,10 @@ class ParameterFormView(QWidget):
         form.addRow("Start date:", self.start_date_edit)
         form.addRow("End date:", self.end_date_edit)
         form.addRow("", self._error_label("dates"))
-        return group
+        return _section("Time Range", form)
 
-    def _build_analysis_group(self) -> QGroupBox:
-        group = QGroupBox("4. Analysis")
-        form = QFormLayout(group)
+    def _build_analysis_group(self) -> QFrame:
+        form = QFormLayout()
         self.analysis_combo = QComboBox()
         self.analysis_combo.addItems(ANALYSIS_CATEGORIES.keys())
         self.processes_list = QListWidget()
@@ -331,7 +355,7 @@ class ParameterFormView(QWidget):
         form.addRow("Processes:", self.processes_list)
         form.addRow("", self._error_label("processes"))
         form.addRow("", hint)
-        return group
+        return _section("Analysis", form)
 
     # ------------------------------------------------------------- behaviour
     def reset(self) -> None:
