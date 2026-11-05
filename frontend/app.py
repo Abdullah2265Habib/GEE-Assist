@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 import sys
+
+# Hide Qt Multimedia's FFmpeg chatter (version banner, stream info dump). Must be set before Qt loads.
+os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.ffmpeg*=false")
 
 from PyQt6.QtCore import QObject
 from PyQt6.QtGui import QIcon
@@ -27,6 +31,23 @@ def _use_own_taskbar_icon() -> None:
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("GEEAssist.Desktop")
+
+
+def _quiet_ffmpeg() -> None:
+    """Silence FFmpeg's own stderr logging (e.g. the "[av1_mf] could not create MFT" lines printed
+    while Qt probes for hardware encoders). Those messages are harmless; only fatal ones are kept."""
+    import ctypes
+    from pathlib import Path
+
+    import PyQt6
+
+    av_log_fatal = 8
+    for dll in (Path(PyQt6.__file__).parent / "Qt6" / "bin").glob("avutil-*.dll"):
+        try:
+            ctypes.CDLL(str(dll)).av_log_set_level(av_log_fatal)
+        except (OSError, AttributeError):
+            pass
+        return
 
 
 class AppController(QObject):
@@ -62,6 +83,7 @@ class AppController(QObject):
 
 def run() -> int:
     _use_own_taskbar_icon()
+    _quiet_ffmpeg()
     app = QApplication(sys.argv)
     app.setApplicationName("GEE-Assist")
     app.setWindowIcon(QIcon(str(APP_ICON)))
