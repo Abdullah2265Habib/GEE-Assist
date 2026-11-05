@@ -32,6 +32,9 @@ MINT = "#EAF6F0"
 SKY = "#E6F1FA"
 FOAM = "#F4FAF8"
 PAGE_BG = "#F2F8F6"        # soft green-blue page behind the white cards
+HEADER_GREEN = "#DFF1E8"   # section header band: light sage-green ...
+HEADER_BLUE = "#DFEDF7"    # ... fading to a light sky-blue
+HEADER_LINE = "#C4E0D5"
 
 ERROR = "#C0392B"
 SUCCESS = "#23845E"
@@ -41,6 +44,8 @@ SANS = "Segoe UI"
 
 _ICONS = Path(__file__).resolve().parent / "resources" / "icons"
 CHECK_ICON = (_ICONS / "check.svg").as_posix()
+CHECK_GREEN_ICON = (_ICONS / "check_green.svg").as_posix()
+CHEVRON_UP_WHITE = (_ICONS / "chevron_up_white.svg").as_posix()
 CHEVRON_DOWN = (_ICONS / "chevron_down.svg").as_posix()
 CHEVRON_UP = (_ICONS / "chevron_up.svg").as_posix()
 
@@ -90,27 +95,27 @@ FORM_STYLESHEET = f"""
 #ParameterForm QWidget {{ font-family: "{SANS}"; font-size: 10pt; color: {TEXT}; }}
 QToolTip {{ background: {WHITE}; color: {INK}; border: 1px solid {BORDER}; padding: 4px 6px; }}
 
-/* ---- section cards ---- */
-#ParameterForm QGroupBox {{ font-family: "{SERIF}"; font-size: 11.5pt; font-weight: bold; }}
-QGroupBox {{
+/* ---- section cards: tinted header band with the heading, white body below ---- */
+QFrame#SectionCard {{
     background: {WHITE};
-    border: 1px solid {BORDER};
+    border: 1px solid {BORDER_STRONG};
     border-radius: 12px;
-    margin-top: 16px;
-    padding: 20px 14px 12px 14px;
 }}
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    subcontrol-position: top left;
-    left: 14px;
-    top: 4px;
-    padding: 2px 10px;
+QFrame#SectionCard QWidget {{ background: transparent; }}
+#ParameterForm QFrame#SectionHeader {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {HEADER_GREEN}, stop:1 {HEADER_BLUE});
+    border: none;
+    border-bottom: 1px solid {HEADER_LINE};
+    border-top-left-radius: 11px;
+    border-top-right-radius: 11px;
+}}
+#ParameterForm QLabel#SectionTitle {{
+    font-family: "{SERIF}";
+    font-size: 13.5pt;
+    font-weight: bold;
     color: {INK};
-    background: {MINT};
-    border: 1px solid {BORDER};
-    border-radius: 8px;
+    background: transparent;
 }}
-QGroupBox QWidget {{ background: transparent; }}
 
 /* ---- text ---- */
 QLabel {{ color: {TEXT}; background: transparent; }}
@@ -225,4 +230,47 @@ QScrollBar::handle:vertical {{ background: {BORDER_STRONG}; border-radius: 4px; 
 QScrollBar::handle:vertical:hover {{ background: {BORDER_HOVER}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+"""
+
+
+# ----------------------------------------------------------------------------- main window
+# Only targeted selectors here: this cascades into every page of the window.
+MAIN_WINDOW_STYLESHEET = f"""
+QStatusBar {{
+    background: {WHITE};
+    border-top: 1px solid {BORDER};
+    color: {MUTED};
+    min-height: 40px;
+}}
+QStatusBar::item {{ border: none; }}
+QStatusBar QLabel#ModeCaption {{ color: {MUTED}; padding-right: 2px; }}
+
+QToolButton#ModeSwitcher {{
+    color: {WHITE};
+    font-weight: 600;
+    padding: 6px 16px;
+    margin: 4px 10px 4px 4px;
+    border: none;
+    border-radius: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+}}
+QToolButton#ModeSwitcher:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
+}}
+
+QMenu#ModeMenu {{
+    background: {WHITE};
+    border: 1px solid {BORDER_STRONG};
+    border-radius: 10px;
+    padding: 6px;
+}}
+QMenu#ModeMenu::item {{
+    color: {INK};
+    padding: 8px 18px 8px 30px;
+    border-radius: 6px;
+}}
+QMenu#ModeMenu::item:selected {{ background: {MINT}; }}
+QMenu#ModeMenu::item:checked {{ color: {LEAF_DARK}; font-weight: 600; }}
+QMenu#ModeMenu::indicator {{ width: 14px; height: 14px; left: 8px; }}
+QMenu#ModeMenu::indicator:checked, QMenu#ModeMenu::indicator:exclusive:checked {{ image: url("{CHECK_GREEN_ICON}"); }}
 """
