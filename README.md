@@ -37,7 +37,11 @@ Run the tests with `python -m pytest`.
   lasts `SESSION_DURATION` from `.env` (e.g. `7d`, `12h`, `2m`), counted from signing in; after that
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
-  form (with the "Chat with Gemini" assistant); **Dashboard** in the header returns to it.
+  form (with the "Chat with Gemini" assistant); **Dashboard** in the side bar returns to it.
+- Navigation is in a side bar on the left. Clicking the logo slides it open (full names, e.g.
+  "Downloads") or closed (short labels, e.g. "D").
+- Clicking your name or avatar in the side bar opens the account menu: **View account**,
+  **Sign-up details** and **Manage account** (coming soon).
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
 
 ## Downloading datasets (Google Earth Engine)
@@ -49,7 +53,7 @@ One-time setup:
 3. Sign in once on this computer: `earthengine authenticate` (with the venv active).
 
 Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
-**Start Download** under Kept Requests. The **Downloads** page (dashboard card or header button)
+**Start Download** under Kept Requests. The **Downloads** page (dashboard card or side bar)
 shows progress, speed and ETA, with Start / Pause / Cancel for every download.
 
 How it works:
@@ -87,6 +91,7 @@ How it works:
 | Theme (colours, fonts, styles) | `frontend/theme.py` |
 | Admin user management | `frontend/views/user_admin_view.py` |
 | Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
+| Side bar | `frontend/widgets/side_bar.py` |
 | Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
