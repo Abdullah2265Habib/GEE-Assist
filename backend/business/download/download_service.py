@@ -34,7 +34,7 @@ from backend.business.download.job_store import MANIFEST_NAME, DownloadJobStore
 from backend.business.download.naming import dataset_folder_name, unique_folder
 from backend.business.download.speed_meter import SpeedMeter
 from backend.config import get_dataset
-from backend.config.download_settings import DEFAULT_RETRY_LIMIT
+from backend.config.download_settings import DEFAULT_RETRY_LIMIT, DownloadSettingsStore
 from backend.data.i_data_facade import IDataFacade
 from backend.dto import ChunkDTO, DatasetDTO, DownloadJobDTO, FormDTO
 from backend.dto.download_dto import (
@@ -67,6 +67,7 @@ class DownloadService(IDownloadService):
         download_dir: str | Path,
         retry_limit: int = DEFAULT_RETRY_LIMIT,
         job_store: Optional[DownloadJobStore] = None,
+        settings: Optional[DownloadSettingsStore] = None,
         retry_delay: float = RETRY_DELAY_SECONDS,
         clock: Callable[[], float] = time.monotonic,
     ):
@@ -76,6 +77,7 @@ class DownloadService(IDownloadService):
         self._download_dir = Path(download_dir)
         self._retry_limit = retry_limit
         self._store = job_store or DownloadJobStore()
+        self._settings = settings or DownloadSettingsStore()
         self._retry_delay = retry_delay
         self._clock = clock
 
@@ -176,6 +178,15 @@ class DownloadService(IDownloadService):
     def list_jobs(self) -> list[DownloadJobDTO]:
         with self._lock:
             return [self._snapshot(job) for job in self._jobs.values()]
+
+    def chunk_size_mb(self) -> int:
+        return self._settings.load().chunk_size_mb
+
+    def set_chunk_size_mb(self, size_mb: int) -> int:
+        return self._settings.set_chunk_size_mb(size_mb).chunk_size_mb
+
+    def is_gee_available(self) -> bool:
+        return self._data_facade.validate_access()
 
     def shutdown(self, timeout: float = 5.0) -> None:
         """Pause the active download (it resumes next time) and stop the worker."""
