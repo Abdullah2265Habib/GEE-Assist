@@ -93,7 +93,6 @@ class DownloadView(QWidget):
         self._facade = facade
         self._rows: dict[str, tuple[CollapsibleSection, QWidget]] = {}
         self._peak = 0.0
-        self._gee_checked = False
 
         title = QLabel("Downloads", objectName="PageTitle")
         subtitle = QLabel(
@@ -188,8 +187,7 @@ class DownloadView(QWidget):
         super().showEvent(event)
         self.refresh()
         self._timer.start()
-        if not self._gee_checked:
-            self.check_connection()
+        self.check_connection()  # again on every visit, so fixing the setup shows up
 
     def hideEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().hideEvent(event)
@@ -202,7 +200,6 @@ class DownloadView(QWidget):
         run_task(self, self._facade.start_download, form, on_success=self._on_started, on_error=self._show_error)
 
     def check_connection(self) -> None:
-        self._gee_checked = True
         run_task(self, self._facade.is_gee_available, on_success=self._on_connection, on_error=lambda _: self._on_connection(False))
 
     def refresh(self) -> None:
@@ -237,7 +234,10 @@ class DownloadView(QWidget):
             self.connection.setText("GEE Connection: Active")
             self.connection.setStyleSheet(f"color: {theme.SUCCESS};")
         else:
-            self.connection.setText("GEE Connection: not signed in (set GEE_PROJECT and run earthengine authenticate)")
+            self.connection.setText(
+                "GEE Connection: not available (check GEE_PROJECT, `earthengine authenticate` "
+                "and that the Earth Engine API is enabled for the project)"
+            )
             self.connection.setStyleSheet(f"color: {theme.ERROR};")
 
     def _start_job(self, job: DownloadJobDTO) -> None:
