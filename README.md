@@ -40,8 +40,8 @@ Run the tests with `python -m pytest`.
   form (with the "Chat with Gemini" assistant); **Dashboard** in the side bar returns to it.
 - Navigation is in a side bar on the left. Clicking the logo slides it open (full names, e.g.
   "Downloads") or closed (short labels, e.g. "D").
-- Clicking your name or avatar in the side bar opens the account menu: **View account**,
-  **Sign-up details** and **Manage account** (coming soon).
+- Clicking your name or avatar in the side bar opens the account menu: **Manage account**
+  (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
 
 ## Downloading datasets (Google Earth Engine)
