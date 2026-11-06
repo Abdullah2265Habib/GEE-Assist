@@ -48,6 +48,13 @@ CHECK_GREEN_ICON = (_ICONS / "check_green.svg").as_posix()
 CHEVRON_UP_WHITE = (_ICONS / "chevron_up_white.svg").as_posix()
 CHEVRON_DOWN = (_ICONS / "chevron_down.svg").as_posix()
 CHEVRON_UP = (_ICONS / "chevron_up.svg").as_posix()
+SPARKLE_WHITE_ICON = (_ICONS / "sparkle_white.svg").as_posix()
+
+
+def qcolor(hex_value: str, alpha: int = 255) -> QColor:
+    c = QColor(hex_value)
+    c.setAlpha(alpha)
+    return c
 
 
 def apply_light_mode(app: QApplication) -> None:
@@ -297,6 +304,47 @@ QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 
 /* ---- bottom action bar ---- */
 #FormActionBar {{ background: {WHITE}; border-top: 1px solid {BORDER}; }}
+
+/* ---- floating query assistant ---- */
+QPushButton#AssistantButton {{
+    border: none; border-radius: 29px; padding: 0;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF}, stop:1 {OCEAN});
+}}
+QPushButton#AssistantButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
+}}
+QPushButton#AssistantButton:checked {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
+}}
+QFrame#AssistantPanel {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 16px; }}
+QFrame#AssistantPanel QLabel {{ background: transparent; }}
+#ParameterForm QLabel#AssistantTitle {{ font-family: "{SERIF}"; font-size: 13.5pt; color: {INK}; }}
+QPushButton#AssistantClose {{
+    border: none; background: transparent; color: {MUTED};
+    font-size: 11pt; font-weight: 600; padding: 2px 6px; border-radius: 6px;
+}}
+QPushButton#AssistantClose:hover {{ color: {INK}; background: {FOAM}; }}
+QPushButton#AssistantLink {{
+    border: none; background: transparent; color: {OCEAN}; font-weight: 600; padding: 4px 2px;
+}}
+QPushButton#AssistantLink:hover {{ color: {OCEAN_DARK}; text-decoration: underline; }}
+QPushButton#AssistantLink::menu-indicator {{ image: none; width: 0; }}
+QMenu#AssistantMenu {{ background: {WHITE}; border: 1px solid {BORDER_STRONG}; border-radius: 10px; padding: 6px; }}
+QMenu#AssistantMenu::item {{ color: {INK}; padding: 7px 14px; border-radius: 6px; }}
+QMenu#AssistantMenu::item:selected {{ background: {MINT}; }}
+QPlainTextEdit#AssistantInput {{
+    background: {FIELD_BG}; color: {INK};
+    border: 1px solid {BORDER_STRONG}; border-radius: 9px; padding: 6px 8px;
+    selection-background-color: {OCEAN}; selection-color: {WHITE};
+}}
+QPlainTextEdit#AssistantInput:focus {{ border: 1px solid {LEAF}; background: {WHITE}; }}
+QProgressBar#BusyBar {{
+    background: {MINT}; border: none; border-radius: 2px; max-height: 4px; min-height: 4px;
+}}
+QProgressBar#BusyBar::chunk {{
+    border-radius: 2px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+}}
 
 /* ---- scrolling ---- */
 QScrollArea {{ background: transparent; border: none; }}
