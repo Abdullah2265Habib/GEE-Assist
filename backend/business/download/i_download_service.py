@@ -52,3 +52,7 @@ class IDownloadService(ABC):
     @abstractmethod
     def is_gee_available(self) -> bool:
         """True if Google Earth Engine is signed in and usable."""
+
+    @abstractmethod
+    def shutdown(self, timeout: float = 5.0) -> None:
+        """Pause the active download so it resumes next time, and stop the worker."""

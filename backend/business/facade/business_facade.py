@@ -122,3 +122,6 @@ class BusinessFacade(IBusinessFacade):
 
     def is_gee_available(self) -> bool:
         return self._download_service.is_gee_available()
+
+    def shutdown_downloads(self) -> None:
+        self._download_service.shutdown()

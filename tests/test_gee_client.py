@@ -106,6 +106,18 @@ def test_stopped_chunk_continues_with_the_next_tile(tmp_path):
         assert [src.read(1)[row, 0] for row in (0, 10, 20, 30)] == [1, 2, 3, 4]
 
 
+def test_damaged_partial_chunk_is_downloaded_again(tmp_path):
+    client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
+    done = []
+    client.fetch_chunk(chunk, str(path), on_progress=done.append, should_stop=lambda: len(done) == 2)
+    path.write_bytes(b"truncated when the app was killed")
+
+    assert client.fetch_chunk(chunk, str(path)) is True
+    assert client.fetched == [0, 1, 0, 1, 2, 3]  # started the chunk over
+    with rasterio.open(path) as src:
+        assert [src.read(1)[row, 0] for row in (0, 10, 20, 30)] == [1, 2, 3, 4]
+
+
 def test_tile_of_the_wrong_shape_is_an_error(tmp_path):
     client = FakeGEEClient()
     client.wrong_shape = True
