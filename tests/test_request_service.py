@@ -29,6 +29,12 @@ class FakeDataFacade(IDataFacade):
             raise self.error
         return self.answer
 
+    def fetch_chunk(self, chunk, path, on_progress=None, should_stop=None) -> bool:  # not used here
+        raise NotImplementedError
+
+    def validate_access(self) -> bool:
+        return False
+
 
 # ------------------------------------------------------------------ submit_query
 RULES_ONLY = QueryEntityExtractor(use_spacy=False, today=TODAY)  # deterministic, no spaCy model needed

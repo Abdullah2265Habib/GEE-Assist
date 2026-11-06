@@ -27,6 +27,8 @@ class DatasetInfo:
     default_bands: tuple[str, ...]
     supported_analyses: dict[str, tuple[str, ...]] = field(default_factory=dict)
     supports_cloud_filter: bool = False
+    cloud_property: str = ""                 # image property the cloud filter compares
+    satellite: str = ""                      # short source name used in download folder names
     default_composite: str = "median"
     min_date: date = date(1984, 1, 1)
     max_date: Optional[date] = None          # None = still acquiring
@@ -66,6 +68,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     # ---------------------------------------------------------------- optical
     DatasetInfo(
         key="sentinel2_sr",
+        satellite="Sentinel-2",
         name="Sentinel-2 Surface Reflectance (L2A)",
         category="Optical (multispectral)",
         collection_id="COPERNICUS/S2_SR_HARMONIZED",
@@ -74,10 +77,12 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("B2", "B3", "B4", "B8", "B11"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION},
         supports_cloud_filter=True,
+        cloud_property="CLOUDY_PIXEL_PERCENTAGE",
         min_date=date(2017, 3, 28),
     ),
     DatasetInfo(
         key="sentinel2_toa",
+        satellite="Sentinel-2",
         name="Sentinel-2 Top-of-Atmosphere (L1C)",
         category="Optical (multispectral)",
         collection_id="COPERNICUS/S2_HARMONIZED",
@@ -86,10 +91,12 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("B2", "B3", "B4", "B8", "B11"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION},
         supports_cloud_filter=True,
+        cloud_property="CLOUDY_PIXEL_PERCENTAGE",
         min_date=date(2015, 6, 27),
     ),
     DatasetInfo(
         key="landsat9_l2",
+        satellite="Landsat-9",
         name="Landsat 9 Collection 2 Level-2",
         category="Optical (multispectral)",
         collection_id="LANDSAT/LC09/C02/T1_L2",
@@ -98,10 +105,12 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(2021, 10, 31),
     ),
     DatasetInfo(
         key="landsat8_l2",
+        satellite="Landsat-8",
         name="Landsat 8 Collection 2 Level-2",
         category="Optical (multispectral)",
         collection_id="LANDSAT/LC08/C02/T1_L2",
@@ -110,10 +119,12 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(2013, 3, 18),
     ),
     DatasetInfo(
         key="landsat7_l2",
+        satellite="Landsat-7",
         name="Landsat 7 Collection 2 Level-2",
         category="Optical (multispectral)",
         collection_id="LANDSAT/LE07/C02/T1_L2",
@@ -122,10 +133,12 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(1999, 5, 28),
     ),
     DatasetInfo(
         key="landsat5_l2",
+        satellite="Landsat-5",
         name="Landsat 5 Collection 2 Level-2",
         category="Optical (multispectral)",
         collection_id="LANDSAT/LT05/C02/T1_L2",
@@ -134,11 +147,13 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(1984, 3, 16),
         max_date=date(2012, 5, 5),
     ),
     DatasetInfo(
         key="modis_sr_8day",
+        satellite="MODIS-Terra",
         name="MODIS Terra Surface Reflectance 8-Day (MOD09A1)",
         category="Optical (multispectral)",
         collection_id="MODIS/061/MOD09A1",
@@ -151,6 +166,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     # ------------------------------------------------------------------- SAR
     DatasetInfo(
         key="sentinel1_grd",
+        satellite="Sentinel-1",
         name="Sentinel-1 SAR GRD (C-band)",
         category="Radar (SAR)",
         collection_id="COPERNICUS/S1_GRD",
@@ -164,6 +180,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     # ---------------------------------------------------- vegetation products
     DatasetInfo(
         key="modis_vi_16day",
+        satellite="MODIS-Terra",
         name="MODIS Terra Vegetation Indices 16-Day 250 m (MOD13Q1)",
         category="Vegetation products",
         collection_id="MODIS/061/MOD13Q1",
@@ -176,6 +193,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     # ----------------------------------------------------------- temperature
     DatasetInfo(
         key="modis_lst",
+        satellite="MODIS-Terra",
         name="MODIS Terra Land Surface Temperature 8-Day (MOD11A2)",
         category="Temperature",
         collection_id="MODIS/061/MOD11A2",
@@ -187,6 +205,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     ),
     DatasetInfo(
         key="modis_lst_aqua",
+        satellite="MODIS-Aqua",
         name="MODIS Aqua Land Surface Temperature 8-Day (MYD11A2)",
         category="Temperature",
         collection_id="MODIS/061/MYD11A2",
@@ -198,6 +217,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     ),
     DatasetInfo(
         key="era5_land_daily",
+        satellite="ERA5-Land",
         name="ERA5-Land Daily Aggregated (climate reanalysis)",
         category="Temperature",
         collection_id="ECMWF/ERA5_LAND/DAILY_AGGR",
@@ -211,6 +231,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     # ------------------------------------------------------------ land cover
     DatasetInfo(
         key="dynamic_world",
+        satellite="Dynamic-World",
         name="Dynamic World Land Use / Land Cover (10 m)",
         category="Land cover",
         collection_id="GOOGLE/DYNAMICWORLD/V1",
@@ -224,6 +245,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     ),
     DatasetInfo(
         key="modis_landcover",
+        satellite="MODIS",
         name="MODIS Land Cover Type Yearly 500 m (MCD12Q1)",
         category="Land cover",
         collection_id="MODIS/061/MCD12Q1",
@@ -237,6 +259,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
     # --------------------------------------------------------- surface water
     DatasetInfo(
         key="jrc_water_monthly",
+        satellite="JRC-GSW",
         name="JRC Global Surface Water Monthly History",
         category="Surface water",
         collection_id="JRC/GSW1_4/MonthlyHistory",

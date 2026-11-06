@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from backend.business.download.i_download_service import IDownloadService
 from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.request.i_request_service import IRequestService
 from backend.business.user.i_user_service import IUserService
-from backend.dto import FormDTO, ValidationDTO
+from backend.dto import DownloadJobDTO, FormDTO, ValidationDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SignupDTO,
@@ -17,13 +18,19 @@ from backend.dto.user_dto import (
 class BusinessFacade(IBusinessFacade):
     """Class diagram: BusinessFacade. Delegates to the services.
 
-    Other services (download, analysis, map, explanation, report) are
-    injected here as their use cases are implemented.
+    Other services (analysis, map, explanation, report) are injected here as
+    their use cases are implemented.
     """
 
-    def __init__(self, user_service: IUserService, request_service: IRequestService):
+    def __init__(
+        self,
+        user_service: IUserService,
+        request_service: IRequestService,
+        download_service: IDownloadService,
+    ):
         self._user_service = user_service
         self._request_service = request_service
+        self._download_service = download_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -84,3 +91,37 @@ class BusinessFacade(IBusinessFacade):
 
     def get_kept_requests(self) -> list[FormDTO]:
         return self._request_service.get_kept_requests()
+
+    # ------------------------------------------------------------- download (UC-05)
+    def start_download(self, form: FormDTO) -> DownloadJobDTO:
+        return self._download_service.start_download(form)
+
+    def get_download_progress(self, job: DownloadJobDTO) -> DownloadJobDTO:
+        return self._download_service.get_progress(job)
+
+    def pause_download(self, job: DownloadJobDTO) -> DownloadJobDTO:
+        return self._download_service.pause(job)
+
+    def resume_download(self, job: DownloadJobDTO) -> DownloadJobDTO:
+        return self._download_service.resume(job)
+
+    def cancel_download(self, job: DownloadJobDTO) -> DownloadJobDTO:
+        return self._download_service.cancel(job)
+
+    def retry_failed_chunks(self, job: DownloadJobDTO) -> DownloadJobDTO:
+        return self._download_service.retry_failed_chunks(job)
+
+    def list_downloads(self) -> list[DownloadJobDTO]:
+        return self._download_service.list_jobs()
+
+    def get_chunk_size_mb(self) -> int:
+        return self._download_service.chunk_size_mb()
+
+    def set_chunk_size_mb(self, size_mb: int) -> int:
+        return self._download_service.set_chunk_size_mb(size_mb)
+
+    def is_gee_available(self) -> bool:
+        return self._download_service.is_gee_available()
+
+    def shutdown_downloads(self) -> None:
+        self._download_service.shutdown()

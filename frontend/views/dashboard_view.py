@@ -1,7 +1,7 @@
 """Dashboard shown right after signing in: a greeting and one card per workspace.
 
-Only "Query Input" opens something for now; the other cards are placeholders for
-the use cases that are not built yet (download, analysis, reports).
+"Query Input" and "Download" open their pages; the other cards are placeholders
+for the use cases that are not built yet (analysis, reports).
 """
 
 from __future__ import annotations
@@ -77,9 +77,10 @@ class DashboardTile(QFrame):
 
 
 class DashboardView(QWidget):
-    """Start page after sign-in. Emits ``open_query_input`` when its card's button is pressed."""
+    """Start page after sign-in. Emits ``open_query_input`` / ``open_downloads`` from its cards."""
 
     open_query_input = pyqtSignal()
+    open_downloads = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -94,9 +95,14 @@ class DashboardView(QWidget):
             "area of interest, dates and analysis.",
             "Open Query Input",
         )
+        self.download_tile = DashboardTile(
+            "⤓", "Download",
+            "Fetch requested imagery from Google Earth Engine in chunks; pause, resume or cancel any time.",
+            "Open Downloads",
+        )
         tiles = (
             self.query_tile,
-            DashboardTile("⤓", "Download", "Fetch the requested imagery from Google Earth Engine as GeoTIFF.", None),
+            self.download_tile,
             DashboardTile("◔", "Analysis", "Run indices, classification and change detection on your data.", None),
             DashboardTile("☰", "Reports", "Collect maps, charts and explanations into a report.", None),
         )
@@ -125,6 +131,8 @@ class DashboardView(QWidget):
 
         assert self.query_tile.button is not None
         self.query_tile.button.clicked.connect(self.open_query_input)
+        assert self.download_tile.button is not None
+        self.download_tile.button.clicked.connect(self.open_downloads)
 
     def set_user(self, user: UserDTO) -> None:
         first_name = (user.full_name or "").split(" ")[0] or "there"

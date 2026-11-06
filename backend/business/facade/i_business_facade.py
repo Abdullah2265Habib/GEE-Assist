@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from backend.dto import FormDTO, ValidationDTO
+from backend.dto import DownloadJobDTO, FormDTO, ValidationDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SignupDTO,
@@ -16,8 +16,8 @@ from backend.dto.user_dto import (
 class IBusinessFacade(ABC):
     """Class diagram: IBusinessFacade. The only backend entry point the UI uses.
 
-    The authentication and query-input operations exist so far; the other use
-    cases (download, analysis, ...) add their methods here.
+    The authentication, query-input and download operations exist so far; the other
+    use cases (analysis, maps, ...) add their methods here.
     """
 
     # ------------------------------------------------------------- authentication
@@ -79,3 +79,38 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def get_kept_requests(self) -> list[FormDTO]: ...
+
+    # ------------------------------------------------------------- download (UC-05)
+    @abstractmethod
+    def start_download(self, form: FormDTO) -> DownloadJobDTO: ...
+
+    @abstractmethod
+    def get_download_progress(self, job: DownloadJobDTO) -> DownloadJobDTO: ...
+
+    @abstractmethod
+    def pause_download(self, job: DownloadJobDTO) -> DownloadJobDTO: ...
+
+    @abstractmethod
+    def resume_download(self, job: DownloadJobDTO) -> DownloadJobDTO: ...
+
+    @abstractmethod
+    def cancel_download(self, job: DownloadJobDTO) -> DownloadJobDTO: ...
+
+    @abstractmethod
+    def retry_failed_chunks(self, job: DownloadJobDTO) -> DownloadJobDTO: ...
+
+    @abstractmethod
+    def list_downloads(self) -> list[DownloadJobDTO]: ...
+
+    @abstractmethod
+    def get_chunk_size_mb(self) -> int: ...
+
+    @abstractmethod
+    def set_chunk_size_mb(self, size_mb: int) -> int: ...
+
+    @abstractmethod
+    def is_gee_available(self) -> bool: ...
+
+    @abstractmethod
+    def shutdown_downloads(self) -> None:
+        """Called when the app closes: the active download is paused and resumes next time."""

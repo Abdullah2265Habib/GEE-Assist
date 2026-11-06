@@ -93,6 +93,9 @@ def run() -> int:
     apply_theme(app)
     install_wheel_guard(app)  # wheel only edits a field the user has selected
 
-    controller = AppController(build_business_facade())
+    facade = build_business_facade()
+    # Pause the active download cleanly so its files are closed and it resumes next time.
+    app.aboutToQuit.connect(facade.shutdown_downloads)
+    controller = AppController(facade)
     controller.start()
     return app.exec()

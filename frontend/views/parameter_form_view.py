@@ -34,6 +34,7 @@ from backend.config import (
     DEFAULT_DOWNLOAD_DIR,
     GEE_MAX_GRID_DIMENSION,
     GEE_MAX_REQUEST_BYTES,
+    GEE_REQUEST_BYTES_PER_PIXEL,
     DatasetInfo,
     datasets_by_category,
     get_dataset,
@@ -708,9 +709,12 @@ class ParameterFormView(QWidget):
         if not aoi or not bands:
             self.estimate_label.setText("Size estimate appears once an area and at least one band are chosen.")
             return
+        # Sizes are float32 (file size); GEE counts 5 bytes per pixel and band against its
+        # request limit, so the limit is scaled to count requests the way GEE does.
         estimate = estimate_download(
             json.loads(aoi), self.scale_spin.value(), len(bands),
-            BYTES_PER_PIXEL, GEE_MAX_REQUEST_BYTES, GEE_MAX_GRID_DIMENSION,
+            BYTES_PER_PIXEL, GEE_MAX_REQUEST_BYTES * BYTES_PER_PIXEL // GEE_REQUEST_BYTES_PER_PIXEL,
+            GEE_MAX_GRID_DIMENSION,
         )
         tiles = "1 request" if estimate.requests == 1 else f"{estimate.requests:,} tiles"
         self.estimate_label.setText(

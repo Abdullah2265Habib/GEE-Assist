@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QDockWidget, QMainWindow
 
 from backend.business.facade import IBusinessFacade
@@ -13,6 +13,8 @@ from frontend.views.parameter_form_view import ParameterFormView
 class MainWindow(QMainWindow):
     """The parameter form and a side panel listing the kept requests, with the
     natural-language assistant ("Chat with Gemini") at the bottom of the panel."""
+
+    download_requested = pyqtSignal(object)  # FormDTO: "Start Download" on a kept request
 
     def __init__(self, facade: IBusinessFacade):
         super().__init__()
@@ -32,8 +34,9 @@ class MainWindow(QMainWindow):
 
         self.statusBar().setSizeGripEnabled(False)
         self.form_view.request_kept.connect(self._on_request_kept)
+        self.kept_view.download_requested.connect(self.download_requested)
         self.statusBar().showMessage("Ready  ·  Press Ctrl+K or Chat with Gemini to describe a request in plain language")
 
     def _on_request_kept(self, form: FormDTO) -> None:
         self.kept_view.set_requests(self._facade.get_kept_requests())
-        self.statusBar().showMessage("Form parameters kept.", 5000)
+        self.statusBar().showMessage("Form parameters kept. Press Start Download to fetch the data.", 8000)
