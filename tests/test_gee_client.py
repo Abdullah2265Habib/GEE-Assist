@@ -43,7 +43,7 @@ class FakeGEEClient(GEEClient):
     def __init__(self, tile_rows=10, **kwargs):
         chunk = _chunk()
         super().__init__(project="test", parallel_requests=1,
-                         max_request_bytes=chunk.width * tile_rows * len(chunk.bands) * 4, **kwargs)
+                         max_request_bytes=chunk.width * tile_rows * len(chunk.bands) * 5, **kwargs)
         self.fetched: list[int] = []
         self.wrong_shape = False
 
@@ -62,8 +62,17 @@ class FakeGEEClient(GEEClient):
 # ------------------------------------------------------------------ tiles
 def test_tiles_stay_under_the_request_size():
     tiles = plan_tiles(66_800, 3_340, band_count=4, max_bytes=40_000_000)
-    assert all(t.width * t.height * 4 * 4 <= 40_000_000 for t in tiles)
+    assert all(t.width * t.height * 4 * 5 <= 40_000_000 for t in tiles)  # GEE counts 5 bytes / pixel / band
     assert sum(t.width * t.height for t in tiles) == 66_800 * 3_340
+
+
+def test_tiles_stay_under_gee_limit_as_gee_counts_it():
+    """The chunk that failed: GEE reported a 6605 x 342 x 5-band tile as 56 472 750 bytes."""
+    from backend.config import GEE_MAX_REQUEST_BYTES
+
+    tiles = plan_tiles(6605, 2738, band_count=5)
+    assert all(t.width * t.height * 5 * 5 <= GEE_MAX_REQUEST_BYTES for t in tiles)
+    assert tiles[0].height < 342
 
 
 def test_tiles_respect_the_32768_pixel_side_limit():
@@ -136,7 +145,7 @@ def test_tile_request_shifts_the_grid_to_the_tile_corner(monkeypatch):
     ee = MagicMock()
     monkeypatch.setattr(GEEClient, "_ee", staticmethod(lambda: ee))
     chunk = _chunk()
-    tile = plan_tiles(50, 40, 2, max_bytes=50 * 10 * 2 * 4)[2]  # rows 20-29
+    tile = plan_tiles(50, 40, 2, max_bytes=50 * 10 * 2 * 5)[2]  # rows 20-29
 
     GEEClient(project="p")._fetch_tile("image", chunk, tile)
 
