@@ -16,7 +16,7 @@ from backend.data.clients.gee_client import NODATA, GEEClient  # noqa: E402
 from backend.data.clients.gee_tiles import plan_tiles  # noqa: E402
 from backend.data.data_facade import DataFacade  # noqa: E402
 from backend.dto import ChunkDTO, FormDTO  # noqa: E402
-from backend.exceptions import GEEError  # noqa: E402
+from backend.exceptions import GEEError, GEESetupError, ValidationError  # noqa: E402
 
 SQUARE = {"type": "Polygon", "coordinates": [[[73.0, 31.0], [73.1, 31.0], [73.1, 31.1], [73.0, 31.1], [73.0, 31.0]]]}
 
@@ -190,18 +190,19 @@ def test_mosaic_composite(fake_ee):
 def test_no_matching_images_is_a_clear_error(fake_ee):
     _, collection = fake_ee
     collection.size.return_value.getInfo.return_value = 0
-    with pytest.raises(GEEError, match="No Sentinel-2"):
+    with pytest.raises(ValidationError, match="No Sentinel-2"):  # retrying would not help
         GEEClient(project="p")._build_image(_form(), ["B4"])
 
 
 # ------------------------------------------------------------------ access and errors
 def test_missing_project_is_reported():
-    with pytest.raises(GEEError, match="GEE_PROJECT"):
+    with pytest.raises(GEESetupError, match="GEE_PROJECT"):
         GEEClient(project="")._initialize()
     assert GEEClient(project="").validate_access() is False
 
 
 @pytest.mark.parametrize("raw, expected", [
+    ("Google Earth Engine API has not been used in project x before or it is disabled.", "API is not enabled for project 'x'"),
     ("Please authorize access to your Earth Engine account", "earthengine authenticate"),
     ("Project 'x' is not registered to use Earth Engine", "Register it"),
     ("Too many concurrent aggregations", "busy"),
@@ -222,3 +223,17 @@ def test_data_facade_without_a_gee_client():
     assert facade.validate_access() is False
     with pytest.raises(GEEError):
         facade.fetch_chunk(_chunk(), "c.tif")
+
+
+@pytest.mark.parametrize("raw", [
+    "Google Earth Engine API has not been used in project x before or it is disabled.",
+    "Please authorize access to your Earth Engine account",
+    "Project 'x' is not registered to use Earth Engine",
+])
+def test_setup_problems_are_not_retried(raw):
+    assert isinstance(gee_module._error(Exception(raw), "x"), GEESetupError)
+
+
+def test_temporary_problems_are_retried():
+    error = gee_module._error(Exception("Too many concurrent aggregations"), "x")
+    assert type(error) is GEEError
