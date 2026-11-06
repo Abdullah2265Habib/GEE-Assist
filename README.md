@@ -40,6 +40,29 @@ Run the tests with `python -m pytest`.
   form (with the "Chat with Gemini" assistant); **Dashboard** in the header returns to it.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
 
+## Downloading datasets (Google Earth Engine)
+
+One-time setup:
+
+1. Register a Google Cloud project for Earth Engine at <https://code.earthengine.google.com/register>.
+2. Put its ID in `.env`: `GEE_PROJECT=your-project-id`.
+3. Sign in once on this computer: `earthengine authenticate` (with the venv active).
+
+Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
+**Start Download** under Kept Requests. The **Downloads** page (dashboard card or header button)
+shows progress, speed and ETA, with Start / Pause / Cancel for every download.
+
+How it works:
+
+- The request is split into **chunks of 500 MB** (`workspace/download_settings.json`, or
+  **Change…** on the Downloads page; applies to new downloads). A 2 GB dataset is 4 chunks.
+- Each chunk is fetched from GEE as several requests under GEE's 48 MB limit.
+- Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
+- The result is `<output folder>/<satellite>_<lon>_<lat>/<satellite>_<lon>_<lat>.tif`, e.g.
+  `Sentinel-2_73.8231_33.2334/Sentinel-2_73.8231_33.2334.tif` (centre of the AOI).
+- Pause keeps finished parts; Start continues where it stopped, even after closing the app.
+  Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
+
 ### Where the code is
 
 | Layer | Files |
@@ -55,3 +78,6 @@ Run the tests with `python -m pytest`.
 | Admin user management | `frontend/views/user_admin_view.py` |
 | Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
 | Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |
+| Download (chunking, merging, queue) | `backend/business/download/` |
+| Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
+| Downloads page | `frontend/views/download_view.py`, `frontend/widgets/download_rows.py`, `speed_chart.py` |
