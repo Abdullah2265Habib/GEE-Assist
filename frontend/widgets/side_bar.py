@@ -16,25 +16,36 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QEasingCurve, QElapsedTimer, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import QFrame, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QWIDGETSIZE_MAX,
+    QBoxLayout,
+    QFrame,
+    QPushButton,
+    QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from frontend import theme
 
 LOGO_SIZE = 64
 SIDE_MARGIN = 12
-COLLAPSED_WIDTH = LOGO_SIZE + 2 * SIDE_MARGIN   # just wide enough for the logo
+BORDER = 1        # the line on the bar's right edge
+COLLAPSED_WIDTH = LOGO_SIZE + 2 * SIDE_MARGIN + BORDER   # just wide enough for the logo
 EXPANDED_WIDTH = 220
 SLIDE_MS = 220
 FRAME_MS = 15     # about 60 frames a second
+BUTTON_HEIGHT = 40  # collapsed, a button is as wide as it is high: a circle
 
 STYLESHEET = f"""
-#SideBar {{ background: {theme.WHITE}; border: none; border-right: 1px solid {theme.BORDER}; }}
+#SideBar {{ background: {theme.WHITE}; border: none; border-right: {BORDER}px solid {theme.BORDER}; }}
 QToolButton#SideLogo {{ border: none; background: transparent; padding: 0; }}
 QPushButton#SideButton {{
     border: none; border-radius: 8px; background: transparent; color: {theme.INK};
     font-weight: 600; text-align: left; padding: 0 14px;
 }}
-QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; }}
+QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; border-radius: {BUTTON_HEIGHT // 2}px; }}
 QPushButton#SideButton:hover {{ background: {theme.FOAM}; }}
 QPushButton#SideButton:pressed {{ background: {theme.MINT}; }}
 """
@@ -49,12 +60,17 @@ class SideButton(QPushButton):
         self.setObjectName("SideButton")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(text)
-        self.setFixedHeight(40)
+        self.setFixedHeight(BUTTON_HEIGHT)
         # Narrower than its text while the bar slides: the text is clipped, not the bar held open.
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
     def set_compact(self, compact: bool) -> None:
         self.setText(self.short_text if compact else self.full_text)
+        if compact:
+            self.setFixedWidth(BUTTON_HEIGHT)
+        else:
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(QWIDGETSIZE_MAX)
         self.setProperty("compact", compact)
         self.style().unpolish(self)
         self.style().polish(self)
@@ -69,10 +85,12 @@ class SideBar(QFrame):
         self.setStyleSheet(STYLESHEET)
         self._expanded = True
         self._compact_widgets: list[QWidget] = []
+        self._layout_of: dict[QWidget, QBoxLayout] = {}
 
         self.logo = QToolButton(objectName="SideLogo")
         self.logo.setIcon(QIcon(logo))
         self.logo.setIconSize(QSize(LOGO_SIZE, LOGO_SIZE))
+        self.logo.setFixedSize(LOGO_SIZE, LOGO_SIZE)  # exactly the icon, so the circles line up under it
         self.logo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.logo.clicked.connect(self.toggle)
 
@@ -105,10 +123,12 @@ class SideBar(QFrame):
 
     def add_widget(self, widget: QWidget, footer: bool = False) -> None:
         """Add ``widget`` under the logo, or at the bottom of the bar with ``footer``."""
-        (self._footer if footer else self._items).addWidget(widget)
+        layout = self._footer if footer else self._items
+        layout.addWidget(widget)
+        self._layout_of[widget] = layout
         if hasattr(widget, "set_compact"):
             self._compact_widgets.append(widget)
-            widget.set_compact(not self._expanded)
+            self._apply_compact(widget, not self._expanded)
 
     # ------------------------------------------------------------- sliding
     def is_expanded(self) -> bool:
@@ -152,7 +172,13 @@ class SideBar(QFrame):
 
     def _set_compact(self, compact: bool) -> None:
         for widget in self._compact_widgets:
-            widget.set_compact(compact)
+            self._apply_compact(widget, compact)
+
+    def _apply_compact(self, widget: QWidget, compact: bool) -> None:
+        widget.set_compact(compact)
+        if isinstance(widget, SideButton):  # the circle sits under the logo; full names fill the row
+            centre = Qt.AlignmentFlag.AlignHCenter if compact else Qt.AlignmentFlag(0)
+            self._layout_of[widget].setAlignment(widget, centre)
 
     def _update_logo_tip(self) -> None:
         self.logo.setToolTip("Collapse the side bar" if self._expanded else "Expand the side bar")

@@ -11,7 +11,14 @@ from PyQt6.QtGui import QPixmap  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QLabel  # noqa: E402
 
-from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, SIDE_MARGIN, SLIDE_MS, SideBar  # noqa: E402
+from frontend.widgets.side_bar import (  # noqa: E402
+    BUTTON_HEIGHT,
+    COLLAPSED_WIDTH,
+    EXPANDED_WIDTH,
+    SIDE_MARGIN,
+    SLIDE_MS,
+    SideBar,
+)
 
 
 class CompactLabel(QLabel):
@@ -113,3 +120,26 @@ def test_logo_stays_on_the_left_expanded_and_collapsed(bar):
     QApplication.processEvents()
     assert bar.logo.x() == SIDE_MARGIN
     assert bar.logo.x() + bar.logo.width() <= COLLAPSED_WIDTH  # fits the collapsed bar
+
+
+def test_collapsed_buttons_are_circles_under_the_logo(bar):
+    downloads = bar.add_button("Downloads", "D")
+    bar.show()
+    bar.set_expanded(False, animate=False)
+    QApplication.processEvents()
+
+    assert downloads.width() == downloads.height() == BUTTON_HEIGHT
+    assert downloads.property("compact") is True  # styled with a radius of half its size
+    assert downloads.geometry().center().x() == bar.logo.geometry().center().x()
+
+    bar.set_expanded(True, animate=False)
+    QApplication.processEvents()
+    assert downloads.width() > BUTTON_HEIGHT  # the full name fills the row again
+
+
+def test_buttons_added_while_collapsed_are_circles_too(bar):
+    bar.show()
+    bar.set_expanded(False, animate=False)
+    later = bar.add_button("Downloads", "D")
+    QApplication.processEvents()
+    assert later.width() == BUTTON_HEIGHT
