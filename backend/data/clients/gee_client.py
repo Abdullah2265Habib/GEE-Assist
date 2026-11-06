@@ -23,7 +23,7 @@ from backend.config import BYTES_PER_PIXEL, get_dataset
 from backend.data.clients.gee_tiles import TARGET_REQUEST_BYTES, Tile, plan_tiles
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.dto import ChunkDTO, FormDTO
-from backend.exceptions import GEEError
+from backend.exceptions import GEEError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class GEEClient(IGEEClient):
             if self._initialized:
                 return
             if not self._project:
-                raise GEEError(
+                raise GEESetupError(
                     "Earth Engine is not configured: set GEE_PROJECT in .env to a Google Cloud "
                     "project registered for Earth Engine."
                 )
@@ -71,7 +71,7 @@ class GEEClient(IGEEClient):
             except GEEError:
                 raise
             except Exception as exc:
-                raise GEEError(_explain(exc, self._project)) from exc
+                raise _error(exc, self._project) from exc
             self._initialized = True
 
     @staticmethod
@@ -79,7 +79,7 @@ class GEEClient(IGEEClient):
         try:
             import ee
         except ImportError as exc:
-            raise GEEError("The Earth Engine library is missing: pip install earthengine-api") from exc
+            raise GEESetupError("The Earth Engine library is missing: pip install earthengine-api") from exc
         return ee
 
     # ------------------------------------------------------------- chunks
@@ -145,7 +145,7 @@ class GEEClient(IGEEClient):
         ee = self._ee()
         info = get_dataset(form.dataset)
         if info is None:
-            raise GEEError(f"Unknown dataset: {form.dataset!r}.")
+            raise ValidationError(f"Unknown dataset: {form.dataset!r}.")
         try:
             geometry = ee.Geometry(json.loads(form.aoi))
             collection = ee.ImageCollection(info.collection_id).filterBounds(geometry)
@@ -155,16 +155,16 @@ class GEEClient(IGEEClient):
             if form.max_cloud_cover is not None and info.cloud_property:
                 collection = collection.filter(ee.Filter.lte(info.cloud_property, form.max_cloud_cover))
             if collection.size().getInfo() == 0:
-                raise GEEError(
+                raise ValidationError(
                     f"No {info.name} images match this request. Try a longer date range, "
                     "a higher cloud limit or a different area."
                 )
             composite = collection.mosaic() if form.composite == "mosaic" else getattr(collection, form.composite)()
             return composite.select(list(bands)).toFloat().clip(geometry).unmask(NODATA, False)
-        except GEEError:
+        except (GEEError, ValidationError):
             raise
         except Exception as exc:
-            raise GEEError(_explain(exc, self._project)) from exc
+            raise _error(exc, self._project) from exc
 
     def _fetch_tile(self, image: Any, chunk: ChunkDTO, tile: Tile) -> bytes:
         """GeoTIFF bytes of one tile, on the chunk's grid shifted to the tile's corner."""
@@ -184,7 +184,7 @@ class GEEClient(IGEEClient):
         try:
             return self._ee().data.computePixels(request)
         except Exception as exc:
-            raise GEEError(_explain(exc, self._project)) from exc
+            raise _error(exc, self._project) from exc
 
 
 # ----------------------------------------------------------------------------- GeoTIFF writing
@@ -250,10 +250,30 @@ class _TileProgress:
 
 
 # ----------------------------------------------------------------------------- errors
+def _error(exc: Exception, project: str) -> GEEError:
+    """GEESetupError for problems only the user can fix, GEEError (retried) for the rest."""
+    message = _explain(exc, project)
+    return GEESetupError(message) if _is_setup_problem(str(exc)) else GEEError(message)
+
+
+def _is_setup_problem(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in (
+        "authenticate", "credentials", "authorize", "not registered", "permission",
+        "has not been used in project", "is disabled",
+    )) or ("not found" in lowered and "project" in lowered)
+
+
 def _explain(exc: Exception, project: str) -> str:
     """A readable message for an Earth Engine error."""
     text = str(exc)
     lowered = text.lower()
+    if "has not been used in project" in lowered or ("api" in lowered and "is disabled" in lowered):
+        return (
+            f"The Earth Engine API is not enabled for project '{project}'. Enable it at "
+            f"https://console.developers.google.com/apis/api/earthengine.googleapis.com/overview?project={project} "
+            "then wait a few minutes and press Retry."
+        )
     if "authenticate" in lowered or "credentials" in lowered or "authorize" in lowered:
         return "Earth Engine is not signed in on this computer. Run `earthengine authenticate` once, then try again."
     if "not registered" in lowered or "permission" in lowered or ("not found" in lowered and "project" in lowered):
