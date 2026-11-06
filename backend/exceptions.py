@@ -15,3 +15,7 @@ class AOIImportError(GeeAssistError):
 
 class LLMServiceError(GeeAssistError):
     """Gemini is not configured, failed, or returned an unusable answer (Interpret Query)."""
+
+
+class GEEError(GeeAssistError):
+    """Google Earth Engine is not set up, refused a request, or returned no data (Fetch Data)."""
