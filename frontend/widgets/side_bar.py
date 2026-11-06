@@ -6,11 +6,15 @@ Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
 closed, they are covered first and switch to the short labels at the end.
+
+The slide is driven by a plain timer and a clock rather than a Qt animation: Qt
+WebEngine (used by the sign-in screen and the map) can leave Qt's animation timing
+stopped after its window closes, which would freeze the bar half-way.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QSize, Qt, QVariantAnimation, pyqtSignal
+from PyQt6.QtCore import QEasingCurve, QElapsedTimer, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import QFrame, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
@@ -19,6 +23,7 @@ from frontend import theme
 COLLAPSED_WIDTH = 76
 EXPANDED_WIDTH = 220
 SLIDE_MS = 220
+FRAME_MS = 15     # about 60 frames a second
 LOGO_SIZE = 48
 
 STYLESHEET = f"""
@@ -83,11 +88,12 @@ class SideBar(QFrame):
         layout.addLayout(self._footer)
 
         self.setFixedWidth(EXPANDED_WIDTH)
-        self._slide = QVariantAnimation(self)
-        self._slide.setDuration(SLIDE_MS)
-        self._slide.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._slide.valueChanged.connect(lambda width: self.setFixedWidth(int(width)))
-        self._slide.finished.connect(self._slide_finished)
+        self._slide = QTimer(self)
+        self._slide.setInterval(FRAME_MS)
+        self._slide.timeout.connect(self._slide_step)
+        self._slide_clock = QElapsedTimer()
+        self._slide_from = self._slide_to = EXPANDED_WIDTH
+        self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
         self._update_logo_tip()
 
     # ------------------------------------------------------------- contents
@@ -108,7 +114,7 @@ class SideBar(QFrame):
         return self._expanded
 
     def is_sliding(self) -> bool:
-        return self._slide.state() == QAbstractAnimation.State.Running
+        return self._slide.isActive()
 
     def toggle(self) -> None:
         self.set_expanded(not self._expanded)
@@ -122,14 +128,22 @@ class SideBar(QFrame):
         if expanded:
             self._set_compact(False)  # the names are uncovered as the bar widens
         if animate and self.isVisible():
-            self._slide.setStartValue(self.width())
-            self._slide.setEndValue(target)
+            self._slide_from, self._slide_to = self.width(), target
+            self._slide_clock.start()
             self._slide.start()
         else:
             self.setFixedWidth(target)
             self._slide_finished()
         self._update_logo_tip()
         self.expanded_changed.emit(expanded)
+
+    def _slide_step(self) -> None:
+        progress = min(1.0, self._slide_clock.elapsed() / SLIDE_MS)
+        eased = self._easing.valueForProgress(progress)
+        self.setFixedWidth(round(self._slide_from + (self._slide_to - self._slide_from) * eased))
+        if progress >= 1.0:
+            self._slide.stop()
+            self._slide_finished()
 
     def _slide_finished(self) -> None:
         if not self._expanded:
