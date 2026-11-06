@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 CHUNKS_FOLDER = "chunks"
 RETRY_DELAY_SECONDS = 2.0   # first retry waits 2 s, the second 4 s, ...
+PROGRESS_WINDOW = 60.0      # seconds of progress the ETA is based on
 
 
 class DownloadService(IDownloadService):
@@ -87,13 +88,14 @@ class DownloadService(IDownloadService):
         self._queue: deque[str] = deque()
         self._active_id: Optional[str] = None
         self._stop = threading.Event()      # asks the active job to stop (pause, cancel, shutdown)
-        self._meter = SpeedMeter(clock=clock)
+        self._network = SpeedMeter(clock=clock)                       # bytes received from GEE
+        self._progress = SpeedMeter(window=PROGRESS_WINDOW, clock=clock)  # progress-bar bytes, for the ETA
         self._closed = False
 
         for job in self._store.load_all():
             if job.status in (JOB_RUNNING, JOB_QUEUED):
                 job.status = JOB_PAUSED  # interrupted when the app closed: resumes on request
-            job.speed_bps, job.eta_seconds = 0.0, None
+            job.speed_bps, job.average_speed_bps, job.eta_seconds = 0.0, 0.0, None
             self._jobs[job.id] = job
 
         self._worker = threading.Thread(target=self._run, name="download-worker", daemon=True)
@@ -127,7 +129,9 @@ class DownloadService(IDownloadService):
 
     def get_progress(self, job: DownloadJobDTO) -> DownloadJobDTO:
         with self._lock:
-            return self._snapshot(self._job(job))
+            current = self._job(job)
+            self._update_speed(current)
+            return self._snapshot(current)
 
     def retry_failed_chunks(self, job: DownloadJobDTO) -> DownloadJobDTO:
         with self._lock:
@@ -167,7 +171,7 @@ class DownloadService(IDownloadService):
                 return self._snapshot(current)
             current.status = JOB_CANCELLED
             current.finished_at = _now()
-            current.speed_bps, current.eta_seconds = 0.0, None
+            current.speed_bps, current.average_speed_bps, current.eta_seconds = 0.0, 0.0, None
             self._remove_from_queue(current)
             if self._active_id == current.id:
                 self._stop.set()  # the worker deletes the folder once it has stopped
@@ -177,6 +181,8 @@ class DownloadService(IDownloadService):
 
     def list_jobs(self) -> list[DownloadJobDTO]:
         with self._lock:
+            for job in self._jobs.values():
+                self._update_speed(job)
             return [self._snapshot(job) for job in self._jobs.values()]
 
     def chunk_size_mb(self) -> int:
@@ -213,7 +219,8 @@ class DownloadService(IDownloadService):
                 job.status, job.error = JOB_RUNNING, ""
                 self._active_id = job.id
                 self._stop.clear()
-                self._meter.reset()
+                self._network.start()
+                self._progress.start()
                 self._store.save(job)
             try:
                 self._download(job)
@@ -226,7 +233,9 @@ class DownloadService(IDownloadService):
             finally:
                 with self._lock:
                     self._active_id = None
-                    job.speed_bps = 0.0
+                    job.speed_bps = job.average_speed_bps = 0.0
+                    self._network.reset()
+                    self._progress.reset()
                     if job.status != JOB_COMPLETED:
                         job.eta_seconds = None
                     if job.status == JOB_CANCELLED:
@@ -254,7 +263,7 @@ class DownloadService(IDownloadService):
             try:
                 complete = self._data_facade.fetch_chunk(
                     chunk, chunk.file_path,
-                    on_progress=lambda count: self._on_bytes(job, chunk, count),
+                    on_progress=lambda count, received: self._on_bytes(job, chunk, count, received),
                     should_stop=self._stop.is_set,
                 )
             except (GEESetupError, ValidationError) as exc:
@@ -293,14 +302,25 @@ class DownloadService(IDownloadService):
                 self._store.save(job)
             return True
 
-    def _on_bytes(self, job: DownloadJobDTO, chunk: ChunkDTO, count: int) -> None:
+    def _on_bytes(self, job: DownloadJobDTO, chunk: ChunkDTO, count: int, received: int) -> None:
+        """``count`` raster bytes were written (progress bar); ``received`` bytes came over the network."""
         with self._lock:
-            chunk.downloaded_bytes = min(chunk.size_bytes, chunk.downloaded_bytes + count)
+            before = chunk.downloaded_bytes
+            chunk.downloaded_bytes = min(chunk.size_bytes, before + count)
             job.downloaded_bytes = sum(c.downloaded_bytes for c in job.chunks)
-            self._meter.add(count)
-            job.speed_bps = self._meter.rate()
-            remaining = max(0, job.total_bytes - job.downloaded_bytes)
-            job.eta_seconds = remaining / job.speed_bps if job.speed_bps > 0 else None
+            self._network.add(received)
+            self._progress.add(chunk.downloaded_bytes - before)
+            self._update_speed(job)
+
+    def _update_speed(self, job: DownloadJobDTO) -> None:
+        """Speed and ETA of the running job, as of now (they drop while no data arrives)."""
+        if job.id != self._active_id or job.status != JOB_RUNNING:
+            return
+        job.speed_bps = self._network.rate()
+        job.average_speed_bps = self._network.average()
+        progress_rate = self._progress.rate()
+        remaining = max(0, job.total_bytes - job.downloaded_bytes)
+        job.eta_seconds = remaining / progress_rate if progress_rate > 0 else None
 
     def _merge_in(self, job: DownloadJobDTO, chunk: ChunkDTO) -> None:
         """Fold a downloaded chunk into the job's merged file (the first chunk becomes it)."""

@@ -130,8 +130,8 @@ class GEEClient(IGEEClient):
                         data = future.result()  # GEEError propagates to the caller
                         _write_tile(dst, data, tile, chunk)
                         progress.add(tile.index)
-                        if on_progress:  # raster bytes added, matching the chunk's planned size
-                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL)
+                        if on_progress:  # raster bytes (they add up to the chunk's planned size), bytes received
+                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL, len(data))
                         if stop():
                             return False  # requests still in flight are abandoned
                         submit_next()

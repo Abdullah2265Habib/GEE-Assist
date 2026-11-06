@@ -38,6 +38,7 @@ class FakeData:
         self.failures: dict[int, int] = {}   # chunk id -> failures left
         self.setup_error: Exception | None = None
         self.gate: threading.Event | None = None
+        self.before_gate: tuple[int, int] | None = None  # (raster, received) bytes reported before waiting
         self.calls: list[int] = []
         self.gee_ok = True
 
@@ -49,6 +50,8 @@ class FakeData:
             self.failures[chunk.id] -= 1
             raise GEEError("Earth Engine is busy")
         if self.gate is not None:  # wait until the test opens the gate (or the job is stopped)
+            if self.before_gate and on_progress:
+                on_progress(*self.before_gate)
             while not self.gate.wait(0.01):
                 if should_stop and should_stop():
                     return False
@@ -58,7 +61,7 @@ class FakeData:
                            transform=Affine(*chunk.transform)) as ds:
             ds.write(np.full((len(chunk.bands), chunk.height, chunk.width), chunk.id, "float32"))
         if on_progress:
-            on_progress(chunk.size_bytes)
+            on_progress(chunk.size_bytes, chunk.size_bytes)
         return True
 
     def validate_access(self):
@@ -109,6 +112,37 @@ def _strip_values(job) -> list[int]:
         band = src.read(1)
     starts = np.cumsum([0] + [c.height for c in job.chunks][:-1])
     return [int(band[row, 0]) for row in starts]
+
+
+# ------------------------------------------------------------------ speed and ETA
+def test_speed_is_measured_live_and_drops_while_nothing_arrives(env):
+    make, data, tmp_path = env
+    now = [1000.0]
+    service = make(clock=lambda: now[0])
+    data.gate, data.before_gate = threading.Event(), (300_000, 200_000)  # 300 kB of raster in 200 kB sent
+    job = service.start_download(_form(tmp_path))
+    deadline = time.monotonic() + 10
+    while service.get_progress(job).downloaded_bytes == 0:
+        assert time.monotonic() < deadline, "no progress reported"
+        time.sleep(0.01)
+
+    now[0] = 1010.0  # 10 s after the download started
+    job = service.get_progress(job)
+    assert job.status == JOB_RUNNING
+    assert job.speed_bps == pytest.approx(20_000)          # bytes received over the network / 10 s
+    assert job.average_speed_bps == pytest.approx(20_000)
+    assert job.eta_seconds == pytest.approx((job.total_bytes - 300_000) / 30_000)  # from progress, not network
+
+    now[0] = 1040.0  # nothing more arrived for 40 s: the last burst has left the 20 s window
+    job = service.get_progress(job)
+    assert job.speed_bps == 0
+    assert job.eta_seconds == pytest.approx((job.total_bytes - 300_000) / (300_000 / 40))  # 60 s window: steadier
+    assert job.average_speed_bps == pytest.approx(200_000 / 40)
+    assert [j.speed_bps for j in service.list_jobs()] == [0]
+
+    data.gate.set()
+    job = _wait(service, job, JOB_COMPLETED)
+    assert job.speed_bps == 0 and job.average_speed_bps == 0
 
 
 # ------------------------------------------------------------------ the full download

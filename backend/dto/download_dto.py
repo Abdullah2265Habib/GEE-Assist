@@ -112,7 +112,8 @@ class DownloadJobDTO:
     downloaded_bytes: int = 0
     merged_bytes: int = 0                       # size of the merged GeoTIFF so far
     merged_path: str = ""                       # the merged GeoTIFF so far (top chunks joined)
-    speed_bps: float = 0.0                      # current download speed, bytes / second
+    speed_bps: float = 0.0                      # current download speed (last 20 s), bytes / second
+    average_speed_bps: float = 0.0              # average speed since the download (re)started
     merge_speed_bps: float = 0.0                # speed of the last merge, bytes / second
     eta_seconds: Optional[float] = None
     dataset: Optional[DatasetDTO] = None        # set once the job is completed

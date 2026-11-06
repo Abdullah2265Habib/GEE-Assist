@@ -45,6 +45,7 @@ class FakeGEEClient(GEEClient):
         super().__init__(project="test", parallel_requests=1,
                          max_request_bytes=chunk.width * tile_rows * len(chunk.bands) * 5, **kwargs)
         self.fetched: list[int] = []
+        self.sent: list[int] = []      # size of each response, in bytes
         self.wrong_shape = False
 
     def _initialize(self):
@@ -56,7 +57,9 @@ class FakeGEEClient(GEEClient):
     def _fetch_tile(self, image, chunk, tile):
         self.fetched.append(tile.index)
         shape = (1, 3, 3) if self.wrong_shape else None
-        return _tile_bytes(chunk, tile, tile.index + 1, shape)
+        data = _tile_bytes(chunk, tile, tile.index + 1, shape)
+        self.sent.append(len(data))
+        return data
 
 
 # ------------------------------------------------------------------ tiles
@@ -89,7 +92,7 @@ def test_chunk_is_written_tile_by_tile_on_the_chunk_grid(tmp_path):
     client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
     received = []
 
-    assert client.fetch_chunk(chunk, str(path), on_progress=received.append)
+    assert client.fetch_chunk(chunk, str(path), on_progress=lambda raster, network: received.append((raster, network)))
 
     with rasterio.open(path) as src:
         pixels = src.read()
@@ -98,7 +101,8 @@ def test_chunk_is_written_tile_by_tile_on_the_chunk_grid(tmp_path):
         assert src.descriptions == ("B4", "B8") and src.nodata == NODATA
     assert pixels.shape == (2, 40, 50)
     assert [pixels[0, row, 0] for row in (0, 10, 20, 30)] == [1, 2, 3, 4]  # 4 tiles of 10 rows
-    assert received == [50 * 10 * 2 * 4] * 4  # raster bytes per tile; they add up to the chunk size
+    assert [raster for raster, _ in received] == [50 * 10 * 2 * 4] * 4  # they add up to the chunk size
+    assert [network for _, network in received] == client.sent  # what GEE sent
     assert not path.with_name(path.name + ".tiles.json").exists()
 
 
@@ -106,7 +110,7 @@ def test_stopped_chunk_continues_with_the_next_tile(tmp_path):
     client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
     done = []
 
-    assert client.fetch_chunk(chunk, str(path), on_progress=done.append, should_stop=lambda: len(done) == 2) is False
+    assert client.fetch_chunk(chunk, str(path), on_progress=lambda raster, network: done.append(raster), should_stop=lambda: len(done) == 2) is False
     assert json.loads(path.with_name(path.name + ".tiles.json").read_text()) == [0, 1]
 
     assert client.fetch_chunk(chunk, str(path)) is True
@@ -118,7 +122,7 @@ def test_stopped_chunk_continues_with_the_next_tile(tmp_path):
 def test_damaged_partial_chunk_is_downloaded_again(tmp_path):
     client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
     done = []
-    client.fetch_chunk(chunk, str(path), on_progress=done.append, should_stop=lambda: len(done) == 2)
+    client.fetch_chunk(chunk, str(path), on_progress=lambda raster, network: done.append(raster), should_stop=lambda: len(done) == 2)
     path.write_bytes(b"truncated when the app was killed")
 
     assert client.fetch_chunk(chunk, str(path)) is True
