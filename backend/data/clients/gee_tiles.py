@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.config import BYTES_PER_PIXEL, GEE_MAX_GRID_DIMENSION, GEE_MAX_REQUEST_BYTES
+from backend.config import GEE_MAX_GRID_DIMENSION, GEE_MAX_REQUEST_BYTES, GEE_REQUEST_BYTES_PER_PIXEL
 
 # Aim below the hard limit: GEE adds the GeoTIFF header and rounds sizes its own way.
 TARGET_REQUEST_BYTES = int(GEE_MAX_REQUEST_BYTES * 0.9)
@@ -35,7 +35,7 @@ def plan_tiles(
     Tiles are as wide as possible (full chunk width when it fits) so each request
     returns long, contiguous rows.
     """
-    pixel_bytes = max(1, band_count) * BYTES_PER_PIXEL
+    pixel_bytes = max(1, band_count) * GEE_REQUEST_BYTES_PER_PIXEL  # as GEE counts the request
     tile_width = max(1, min(width, max_dimension, max_bytes // pixel_bytes))
     tile_height = max(1, min(height, max_dimension, max_bytes // (tile_width * pixel_bytes)))
 
