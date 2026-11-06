@@ -8,10 +8,12 @@ from pathlib import Path
 
 from backend.business.request.geojson_utils import read_aoi_geometry, utm_epsg_for, validate_geometry
 from backend.business.request.i_request_service import IRequestService
+from backend.business.request.query_interpretation import check_interpretation
 from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
-from backend.dto import FormDTO, ValidationDTO
 from backend.config.limits import MAX_QUERY_LENGTH
-from backend.exceptions import ValidationError
+from backend.data.i_data_facade import IDataFacade
+from backend.dto import FormDTO, ValidationDTO
+from backend.exceptions import LLMServiceError, ValidationError
 
 _EPSG_CODE = re.compile(r"^EPSG:\d{4,5}$")
 
@@ -19,33 +21,35 @@ _EPSG_CODE = re.compile(r"^EPSG:\d{4,5}$")
 class RequestService(IRequestService):
     """Class diagram: RequestService (-dataFacade: IDataFacade).
 
-    The data facade is optional for now: keeping input only needs memory.
-    It will be used for Interpret Query (Gemini) and saveProject (MongoDB).
+    The data facade reaches Gemini (Interpret Query) and, later, MongoDB (saveProject).
     """
 
-    def __init__(self, data_facade=None):
+    def __init__(self, data_facade: IDataFacade | None = None):
         self._data_facade = data_facade
         self._kept_requests: list[FormDTO] = []
 
     # ------------------------------------------------------------------
-    # UC-02 Enter Natural Language Query      (branch: query-input-nl)
+    # UC-02 Enter Natural Language Query + Interpret Query (LLM)
     # ------------------------------------------------------------------
     def submit_query(self, text: str) -> FormDTO:
-        """Validate and keep the query. Returns a FormDTO holding only the query
-        text; Interpret Query (LLM) fills in the parameters at the next stage.
+        """Interpret the query with Gemini and return form values to review.
+
+        Nothing is kept here: the user checks the filled form and submits it.
 
         Raises:
             ValidationError: the query is empty (5a) or too long.
+            LLMServiceError: Gemini is not set up, failed, or answered unusably.
         """
         query = " ".join((text or "").split())
         if not query:
-            raise ValidationError("Please enter a request describing the data or analysis you need.")
+            raise ValidationError("Please describe the data you need, e.g. the place, dates and dataset.")
         if len(query) > MAX_QUERY_LENGTH:
-            raise ValidationError(f"The query is too long ({len(query)} characters, limit {MAX_QUERY_LENGTH}).")
+            raise ValidationError(f"The request is too long ({len(query)} characters, limit {MAX_QUERY_LENGTH}).")
+        if self._data_facade is None:
+            raise LLMServiceError("Natural-language input is not available: Gemini is not connected.")
 
-        form = FormDTO(source="nl", query_text=query)
-        self._keep(form)
-        return form
+        interpreted = self._data_facade.process_query(query)
+        return check_interpretation(replace(interpreted, source="nl", query_text=query))
 
     # ------------------------------------------------------------------
     # UC-03 Fill Parameter Form               (branch: query-input-form)
