@@ -621,7 +621,11 @@ class ParameterFormView(QWidget):
             )
             return
 
-        summary = f"Filled from your request: {', '.join(filled)}."
+        recognised = list(dict.fromkeys(e.text for e in form.entities))
+        summary = " ".join(filter(None, (
+            f"Recognised: {' · '.join(recognised)}." if recognised else "",
+            f"Filled: {', '.join(filled)}.",
+        )))
         if form.clarification:  # partly understood: keep the card open with Gemini's question
             self.assistant.show_info(f"{summary} {form.clarification}")
         else:
