@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from backend.dto import FormDTO, ValidationDTO
+
+
+class IRequestService(ABC):
+    """Class diagram: IRequestService.
+
+    saveProject / listProjects come later together with persistence.
+    """
+
+    @abstractmethod
+    def submit_query(self, text: str) -> FormDTO:
+        """UC-02: accept a natural-language query and keep it."""
+
+    @abstractmethod
+    def validate_form(self, form: FormDTO) -> ValidationDTO:
+        """UC-03: validate the form parameters; valid forms are kept."""
+
+    @abstractmethod
+    def import_aoi(self, file_path: str) -> str:
+        """UC-04: read a GeoJSON file and return its geometry as a JSON string."""
+
+    @abstractmethod
+    def get_kept_requests(self) -> list[FormDTO]:
+        """Requests kept so far this session (in memory until saveProject exists)."""
