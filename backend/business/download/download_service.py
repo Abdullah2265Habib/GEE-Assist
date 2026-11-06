@@ -109,8 +109,9 @@ class DownloadService(IDownloadService):
             raise ValidationError("Choose a dataset before downloading.")
         chunks = self._chunker.split(form)
         parent = Path(form.output_dir) if form.output_dir else self._download_dir
+        started = datetime.now()
         with self._lock:
-            folder = unique_folder(parent, dataset_folder_name(form))
+            folder = unique_folder(parent, dataset_folder_name(form, started))  # same second: name_2
             for chunk in chunks:
                 chunk.file_path = str(folder / CHUNKS_FOLDER / f"chunk_{chunk.id:03d}.tif")
             job = DownloadJobDTO(
@@ -121,7 +122,7 @@ class DownloadService(IDownloadService):
                 chunks=chunks,
                 request=form,
                 total_bytes=sum(chunk.size_bytes for chunk in chunks),
-                created_at=_now(),
+                created_at=started.isoformat(timespec="seconds"),
             )
             self._jobs[job.id] = job
             self._enqueue(job)

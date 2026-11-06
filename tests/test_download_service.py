@@ -1,6 +1,8 @@
 """DownloadService with a fake Earth Engine that writes real GeoTIFF chunks."""
 
 import json
+import re
+from datetime import datetime
 import threading
 import time
 from pathlib import Path
@@ -13,6 +15,7 @@ from rasterio.transform import Affine  # noqa: E402
 
 from backend.business.download import Chunker, ChunkMerger, DownloadJobStore, DownloadService  # noqa: E402
 from backend.business.download.naming import dataset_folder_name  # noqa: E402
+from backend.business.download import download_service as service_module  # noqa: E402
 from backend.config.download_settings import DownloadSettings, DownloadSettingsStore  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
 from backend.dto.download_dto import (  # noqa: E402
@@ -151,13 +154,15 @@ def test_download_is_split_fetched_merged_and_named(env):
     service = make()
     job = service.start_download(_form(tmp_path))
 
-    assert job.total_chunks == 2 and job.name == "Sentinel-2_73.0250_31.0250"
+    assert job.total_chunks == 2
+    assert re.fullmatch(r"Sentinel-2_73\.0250_31\.0250_\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d", job.name)
+    assert job.name.endswith(datetime.fromisoformat(job.created_at).strftime("%Y-%m-%d_%H-%M-%S"))
     job = _wait(service, job, JOB_COMPLETED)
 
     final = Path(job.folder) / f"{job.name}.tif"
     assert job.dataset.path == str(final) and final.exists()
     assert Path(job.folder).parent == tmp_path / "out"
-    assert sorted(p.name for p in Path(job.folder).iterdir()) == ["Sentinel-2_73.0250_31.0250.tif", "download.json"]
+    assert sorted(p.name for p in Path(job.folder).iterdir()) == [f"{job.name}.tif", "download.json"]
     assert _strip_values(job) == [1, 2]
     assert job.progress == 1.0 and job.completed_chunks == 2
     assert all(c.status == CHUNK_MERGED for c in job.chunks)
@@ -197,7 +202,13 @@ def test_single_chunk_download(env):
     assert job.total_chunks == 1 and Path(job.dataset.path).exists()
 
 
-def test_same_area_twice_gets_a_second_folder(env):
+def test_same_area_twice_in_the_same_second_gets_a_second_folder(env, monkeypatch):
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 6, 21, 30, 5)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDatetime)
     make, _, tmp_path = env
     service = make()
     first = _wait(service, service.start_download(_form(tmp_path)), JOB_COMPLETED)
@@ -388,6 +399,7 @@ def test_gee_access_comes_from_the_data_facade(env):
     assert service.is_gee_available() is False
 
 
-def test_folder_name_uses_the_satellite_and_aoi_centre(tmp_path):
+def test_folder_name_uses_the_satellite_aoi_centre_and_start_time(tmp_path):
     form = _form(tmp_path, dataset="landsat8_l2")
-    assert dataset_folder_name(form) == "Landsat-8_73.0250_31.0250"
+    started = datetime(2026, 11, 6, 21, 30, 5)
+    assert dataset_folder_name(form, started) == "Landsat-8_73.0250_31.0250_2026-11-06_21-30-05"
