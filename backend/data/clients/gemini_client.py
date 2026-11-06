@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import date
 
 from pydantic import BaseModel, Field
 
 from backend.data.clients.i_gemini_client import IGeminiClient
+from backend.config.llm import FALLBACK_MODELS
 from backend.data.clients.prompts import build_query_system_prompt
 from backend.dto import FormDTO
 from backend.exceptions import LLMServiceError
@@ -73,11 +75,13 @@ def interpretation_to_form(data: QueryInterpretation, query: str) -> FormDTO:
 
 
 class GeminiClient(IGeminiClient):
-    def __init__(self, api_key: str, model: str, client=None):
-        """``client`` lets tests pass a fake ``genai.Client``."""
+    def __init__(self, api_key: str, model: str, client=None, fallback_models=FALLBACK_MODELS, sleep=time.sleep):
+        """``client`` lets tests pass a fake ``genai.Client``; ``sleep`` lets them skip the waits."""
         self._api_key = api_key
-        self._model = model
+        # Try the configured model first, then current fallbacks (no duplicates, order kept).
+        self._models = list(dict.fromkeys([model, *fallback_models]))
         self._client = client
+        self._sleep = sleep
 
     def process_query(self, prompt: str) -> FormDTO:
         raw = self._generate(prompt, build_query_system_prompt())
@@ -85,7 +89,7 @@ class GeminiClient(IGeminiClient):
             data = QueryInterpretation.model_validate(json.loads(raw))
         except (json.JSONDecodeError, ValueError) as exc:
             log.warning("Unusable Gemini answer: %s", raw[:500])
-            raise LLMServiceError("Gemini returned an answer that could not be read. Please try again.") from exc
+            raise LLMServiceError("Gemini's answer couldn't be read. Please try again.") from exc
         return interpretation_to_form(data, prompt)
 
     def generate_explanation(self, result) -> str:
@@ -96,17 +100,17 @@ class GeminiClient(IGeminiClient):
         if self._client is not None:
             return self._client
         if not self._api_key:
-            raise LLMServiceError(
-                "Gemini is not set up. Add GEMINI_API_KEY to the .env file in the project folder."
-            )
+            raise LLMServiceError("Gemini isn't set up yet. Add your API key as GEMINI_API_KEY in the .env file.")
         try:
             from google import genai
         except ImportError as exc:
-            raise LLMServiceError("The google-genai package is not installed (pip install google-genai).") from exc
+            raise LLMServiceError("Gemini support isn't installed. Run: pip install -r requirements.txt") from exc
         self._client = genai.Client(api_key=self._api_key)
         return self._client
 
     def _generate(self, contents: str, system_instruction: str) -> str:
+        """Call Gemini. A busy or retired model is skipped for the next one; if all are
+        busy, wait briefly and try once more. Only a short, plain message reaches the user."""
         sdk = self._sdk()
         from google.genai import types
 
@@ -116,27 +120,65 @@ class GeminiClient(IGeminiClient):
             response_mime_type="application/json",
             response_schema=QueryInterpretation,
         )
-        try:
-            response = sdk.models.generate_content(model=self._model, contents=contents, config=config)
-        except LLMServiceError:
-            raise
-        except Exception as exc:  # network, invalid key, quota / rate limit (C-08), ...
-            log.warning("Gemini request failed: %s", exc)
-            raise LLMServiceError(f"Gemini request failed: {_friendly(exc)}") from exc
+        last_kind = "other"
+        for round_number in range(RETRY_ROUNDS):
+            if round_number:
+                self._sleep(RETRY_WAIT_SEC)  # every model was busy: give Gemini a moment
+            for model in list(self._models):
+                try:
+                    response = sdk.models.generate_content(model=model, contents=contents, config=config)
+                except Exception as exc:  # the full error goes to the log, never to the user
+                    last_kind = _classify(exc)
+                    log.warning("Gemini %s failed (%s): %s", model, last_kind, exc)
+                    if last_kind == "model":
+                        self._models.remove(model)  # retired: don't try it again this session
+                        continue
+                    if last_kind in ("busy", "quota"):
+                        continue  # overloaded, or this model's limit is used up: try the next one
+                    raise LLMServiceError(USER_MESSAGES[last_kind]) from exc
 
-        text = (getattr(response, "text", None) or "").strip()
-        if not text:
-            raise LLMServiceError("Gemini returned an empty answer. Please rephrase and try again.")
-        return text
+                text = (getattr(response, "text", None) or "").strip()
+                if not text:
+                    raise LLMServiceError("Gemini didn't return an answer. Please rephrase and try again.")
+                if model != self._models[0]:
+                    reason = {"model": "is retired", "quota": "reached its usage limit"}.get(last_kind, "was busy")
+                    log.warning("Gemini model %s %s; using %s for this session.", self._models[0], reason, model)
+                    self._models.remove(model)
+                    self._models.insert(0, model)
+                return text
+        raise LLMServiceError(USER_MESSAGES["model" if not self._models else last_kind])
 
 
-def _friendly(exc: Exception) -> str:
-    message = str(exc)
-    lowered = message.lower()
-    if "api key" in lowered or "api_key" in lowered or "permission" in lowered or "401" in message or "403" in message:
-        return "the API key was rejected. Check GEMINI_API_KEY."
-    if "429" in message or "quota" in lowered or "rate" in lowered:
-        return "the Gemini quota or rate limit was reached. Wait a moment and try again."
-    if "getaddrinfo" in lowered or "connection" in lowered or "timed out" in lowered:
-        return "no connection to Gemini. Check your internet connection."
-    return message[:200]
+# ----------------------------------------------------------------------------- error handling
+# When every model is busy, wait this long and go through them once more.
+RETRY_ROUNDS = 2
+RETRY_WAIT_SEC = 2.0
+
+USER_MESSAGES = {
+    "key": "Gemini didn't accept the API key. Check GEMINI_API_KEY in the .env file.",
+    "quota": "The Gemini usage limit has been reached. Please wait a minute and try again.",
+    "busy": "Gemini is busy right now. Please try again in a moment.",
+    "model": "The Gemini model is no longer available. Set a current model in GEMINI_MODEL in the .env file.",
+    "network": "Can't reach Gemini. Check your internet connection and try again.",
+    "other": "Gemini couldn't process the request. Please try again.",
+}
+
+
+def _classify(exc: Exception) -> str:
+    """Sort an SDK / network error into one of the USER_MESSAGES kinds."""
+    code = getattr(exc, "code", None)
+    status = str(getattr(exc, "status", "") or "").upper()
+    text = str(exc).lower()
+    if code in (401, 403) or status in ("UNAUTHENTICATED", "PERMISSION_DENIED") or "api key" in text or "api_key" in text:
+        return "key"
+    if code == 429 or status == "RESOURCE_EXHAUSTED" or "quota" in text:
+        return "quota"
+    if code == 404 or status == "NOT_FOUND":
+        return "model"
+    if (isinstance(code, int) and code >= 500) or status in ("UNAVAILABLE", "INTERNAL", "DEADLINE_EXCEEDED"):
+        return "busy"
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)) or any(
+        word in text for word in ("getaddrinfo", "connection", "timed out", "timeout", "network")
+    ):
+        return "network"
+    return "other"
