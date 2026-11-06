@@ -3,7 +3,7 @@
 Read from environment variables or a ``.env`` file in the project root:
 
     GEMINI_API_KEY=your-key          # https://aistudio.google.com/apikey
-    GEMINI_MODEL=gemini-2.5-flash    # optional
+    GEMINI_MODEL=gemini-3.5-flash-lite    # optional
 """
 
 from __future__ import annotations
@@ -18,7 +18,17 @@ try:
 except ImportError:  # python-dotenv is optional; plain environment variables still work
     load_dotenv = None
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+# Tried in order after the configured model. Lighter "lite" models come first: they are
+# faster, see less demand, and are accurate enough for filling the form (the entity
+# classifier gives them hints). Full Flash models are the fallback.
+FALLBACK_MODELS: tuple[str, ...] = (
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+)
 
 
 @dataclass(frozen=True)
