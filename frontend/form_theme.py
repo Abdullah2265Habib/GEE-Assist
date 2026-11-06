@@ -100,6 +100,7 @@ FIELDS = "QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit"
 FORM_STYLESHEET = f"""
 #ParameterForm, #ParameterFormContent {{ background: {PAGE_BG}; }}
 #ParameterForm QWidget {{ font-family: "{SANS}"; font-size: 10pt; color: {TEXT}; }}
+#QueryAssistant QWidget {{ font-family: "{SANS}"; font-size: 10pt; color: {TEXT}; }}
 QToolTip {{ background: {WHITE}; color: {INK}; border: 1px solid {BORDER}; padding: 4px 6px; }}
 
 /* ---- page heading (same look as the sign-in card title) ---- */
@@ -305,7 +306,8 @@ QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 /* ---- bottom action bar ---- */
 #FormActionBar {{ background: {WHITE}; border-top: 1px solid {BORDER}; }}
 
-/* ---- floating query assistant ---- */
+/* ---- query assistant (side panel) ---- */
+#QueryAssistant QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
 QPushButton#AssistantButton {{
     border: none; border-radius: 29px; padding: 0;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF}, stop:1 {OCEAN});
@@ -316,9 +318,9 @@ QPushButton#AssistantButton:hover {{
 QPushButton#AssistantButton:checked {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
 }}
-QFrame#AssistantPanel {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 16px; }}
+QFrame#AssistantPanel {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 12px; }}
 QFrame#AssistantPanel QLabel {{ background: transparent; }}
-#ParameterForm QLabel#AssistantTitle {{ font-family: "{SERIF}"; font-size: 13.5pt; color: {INK}; }}
+QLabel#AssistantTitle {{ font-family: "{SERIF}"; font-size: 13.5pt; color: {INK}; }}
 QPushButton#AssistantClose {{
     border: none; background: transparent; color: {MUTED};
     font-size: 11pt; font-weight: 600; padding: 2px 6px; border-radius: 6px;

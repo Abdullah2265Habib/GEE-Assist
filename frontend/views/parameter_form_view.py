@@ -192,8 +192,9 @@ class ParameterFormView(QWidget):
         self.reset_button.clicked.connect(self.reset)
         self.submit_button.clicked.connect(self._on_submit)
 
-        # Floating natural-language assistant (UC-02): fills this form via Gemini.
-        self.assistant = QueryAssistant(self, scroll, MAX_QUERY_LENGTH)
+        # Natural-language assistant (UC-02): fills this form via Gemini. The
+        # main window places it in the side panel, under the kept requests.
+        self.assistant = QueryAssistant(MAX_QUERY_LENGTH)
         self.assistant.submitted.connect(self._on_query_submitted)
 
         self.reset()
@@ -629,7 +630,7 @@ class ParameterFormView(QWidget):
         if form.clarification:  # partly understood: keep the card open with Gemini's question
             self.assistant.show_info(f"{summary} {form.clarification}")
         else:
-            self.assistant.close()
+            self.assistant.collapse()
         self.status_banner.show_info(" ".join(filter(None, (summary, notes, "Check the values, then press Submit Parameters."))))
 
     def _on_query_failed(self, exc: Exception) -> None:
