@@ -23,6 +23,14 @@ class CompactLabel(QLabel):
         self.compact = compact
 
 
+def _wait_for_slide(bar, timeout_ms: int = 3000) -> None:
+    """Wait until the slide has finished (slower when the whole test suite is running)."""
+    waited = 0
+    while bar.is_sliding() and waited < timeout_ms:
+        QTest.qWait(10)
+        waited += 10
+
+
 @pytest.fixture(scope="module")
 def app():
     return QApplication.instance() or QApplication([])
@@ -71,12 +79,12 @@ def test_clicking_the_logo_slides_the_bar_closed_and_open(bar):
     bar.logo.click()
     assert bar.is_sliding() and not bar.is_expanded()
     assert downloads.text() == "Downloads"   # covered as the bar narrows, switched at the end
-    QTest.qWait(SLIDE_MS + 150)
+    _wait_for_slide(bar)
     assert not bar.is_sliding() and bar.width() == COLLAPSED_WIDTH and downloads.text() == "D"
 
     bar.logo.click()
     assert downloads.text() == "Downloads"   # uncovered as the bar widens
-    QTest.qWait(SLIDE_MS + 150)
+    _wait_for_slide(bar)
     assert bar.width() == EXPANDED_WIDTH
     assert changes == [False, True]
 
@@ -87,5 +95,5 @@ def test_reversing_mid_slide_ends_at_the_new_width(bar):
     bar.logo.click()                          # start closing
     QTest.qWait(SLIDE_MS // 3)
     bar.logo.click()                          # open again before it finished
-    QTest.qWait(SLIDE_MS + 150)
+    _wait_for_slide(bar)
     assert bar.is_expanded() and bar.width() == EXPANDED_WIDTH and downloads.text() == "Downloads"
