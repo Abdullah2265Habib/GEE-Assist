@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from backend.business.download.i_chunk_merger import IChunkMerger
 from backend.config import get_dataset
@@ -24,7 +24,12 @@ class ChunkMerger(IChunkMerger):
     merge never damages an existing merged file.
     """
 
-    def merge(self, chunks: list[ChunkDTO], output_path: Optional[str] = None) -> DatasetDTO:
+    def merge(
+        self,
+        chunks: list[ChunkDTO],
+        output_path: Optional[str] = None,
+        on_progress: Optional[Callable[[int], None]] = None,
+    ) -> DatasetDTO:
         import rasterio
         from rasterio.transform import Affine
         from rasterio.windows import Window
@@ -58,6 +63,8 @@ class ChunkMerger(IChunkMerger):
                         rows = min(ROWS_PER_COPY, chunk.height - row)
                         block = src.read(window=Window(0, row, chunk.width, rows))
                         dst.write(block, window=Window(0, top + row, chunk.width, rows))
+                        if on_progress:
+                            on_progress(block.nbytes)
         os.replace(partial, target)
 
         for chunk in chunks:

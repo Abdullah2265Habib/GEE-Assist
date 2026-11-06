@@ -1,10 +1,8 @@
-"""Download speed of the running download, measured in real time.
+"""Speed of the running download (or merge), measured in real time.
 
-GEE sends a chunk as several requests of up to ~43 MB, and each one arrives in
-a single burst after several seconds. So the speed is the bytes that arrived
-in the last ``window`` seconds divided by that time, rather than the speed of
-each burst. It is worked out at the moment it is read, so it falls back
-towards zero while nothing arrives instead of keeping the last burst's value.
+The speed is the bytes counted in the last ``window`` seconds divided by that
+time, worked out at the moment it is read: like Task Manager, it shows what is
+happening now and drops to zero while nothing arrives.
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ MIN_SPAN = 1.0   # seconds; keeps one early burst from showing as an absurd spee
 class SpeedMeter:
     """Bytes per second over the last ``window`` seconds, and the average since ``start``."""
 
-    def __init__(self, window: float = 20.0, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, window: float = 2.0, clock: Callable[[], float] = time.monotonic):
         self._window = window
         self._clock = clock
         self._samples: deque[tuple[float, int]] = deque()
@@ -45,13 +43,13 @@ class SpeedMeter:
             return 0.0
         self._trim()
         span = min(self._window, self._clock() - self._started)
-        return sum(count for _, count in self._samples) / max(span, MIN_SPAN)
+        return max(0.0, sum(count for _, count in self._samples) / max(span, MIN_SPAN))
 
     def average(self) -> float:
         """Bytes per second since ``start``."""
         if self._started is None:
             return 0.0
-        return self._total / max(self._clock() - self._started, MIN_SPAN)
+        return max(0.0, self._total / max(self._clock() - self._started, MIN_SPAN))
 
     def reset(self) -> None:
         self._samples.clear()

@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 CHUNKS_FOLDER = "chunks"
 RETRY_DELAY_SECONDS = 2.0   # first retry waits 2 s, the second 4 s, ...
-PROGRESS_WINDOW = 60.0      # seconds of progress the ETA is based on
+PROGRESS_WINDOW = 20.0      # seconds of progress the ETA is based on
 
 
 class DownloadService(IDownloadService):
@@ -88,8 +88,10 @@ class DownloadService(IDownloadService):
         self._queue: deque[str] = deque()
         self._active_id: Optional[str] = None
         self._stop = threading.Event()      # asks the active job to stop (pause, cancel, shutdown)
-        self._network = SpeedMeter(clock=clock)                       # bytes received from GEE
+        self._network = SpeedMeter(clock=clock)                       # bytes received from GEE, last 2 s
         self._progress = SpeedMeter(window=PROGRESS_WINDOW, clock=clock)  # progress-bar bytes, for the ETA
+        self._merging = SpeedMeter(clock=clock)                       # bytes copied by the running merge
+        self._merge_running = False
         self._closed = False
 
         for job in self._store.load_all():
@@ -186,7 +188,9 @@ class DownloadService(IDownloadService):
             for job in self._jobs.values():
                 self._update_speed(job)
             snapshots = [self._snapshot(job) for job in self._jobs.values()]
-        return [_with_disk_size(job) for job in snapshots]  # outside the lock: it reads the disk
+            active = self._active_id
+        # Outside the lock (it reads the disk), and only for the running download: the page shows its size.
+        return [_with_disk_size(job) if job.id == active else job for job in snapshots]
 
     def chunk_size_mb(self) -> int:
         return self._settings.load().chunk_size_mb
@@ -306,15 +310,21 @@ class DownloadService(IDownloadService):
             return True
 
     def _on_bytes(self, job: DownloadJobDTO, chunk: ChunkDTO, count: int, received: int) -> None:
-        """``count`` raster bytes were written (progress bar); ``received`` bytes came over the network."""
+        """Progress moved by ``count`` raster bytes (negative when a partly received tile is
+        dropped) and ``received`` bytes came over the network. Called from download threads."""
         with self._lock:
             before = chunk.downloaded_bytes
-            chunk.downloaded_bytes = min(chunk.size_bytes, before + count)
+            chunk.downloaded_bytes = max(0, min(chunk.size_bytes, before + count))
             job.downloaded_bytes = sum(c.downloaded_bytes for c in job.chunks)
-            job.received_bytes += received
-            self._network.add(received)
+            if received:
+                job.received_bytes += received
+                self._network.add(received)
             self._progress.add(chunk.downloaded_bytes - before)
             self._update_speed(job)
+
+    def _on_merged(self, byte_count: int) -> None:
+        with self._lock:
+            self._merging.add(byte_count)
 
     def _update_speed(self, job: DownloadJobDTO) -> None:
         """Speed and ETA of the running job, as of now (they drop while no data arrives)."""
@@ -322,6 +332,7 @@ class DownloadService(IDownloadService):
             return
         job.speed_bps = self._network.rate()
         job.average_speed_bps = self._network.average()
+        job.merge_speed_bps = self._merging.rate() if self._merge_running else 0.0
         progress_rate = self._progress.rate()
         remaining = max(0, job.total_bytes - job.downloaded_bytes)
         job.eta_seconds = remaining / progress_rate if progress_rate > 0 else None
@@ -341,14 +352,20 @@ class DownloadService(IDownloadService):
 
         prefix = ChunkMerger.combined_chunk(merged, DatasetDTO(id="", source="", path=previous))
         output = Path(job.folder) / CHUNKS_FOLDER / f"merged_{merged[0].id:03d}-{chunk.id:03d}.tif"
-        started = self._clock()
-        dataset = self._chunk_merger.merge([prefix, chunk], output_path=str(output))
-        elapsed = max(self._clock() - started, 1e-3)
+        with self._lock:
+            self._merging.start()
+            self._merge_running = True
+        try:
+            dataset = self._chunk_merger.merge([prefix, chunk], output_path=str(output), on_progress=self._on_merged)
+        finally:
+            with self._lock:
+                self._merge_running = False
+                self._merging.reset()
+                job.merge_speed_bps = 0.0
         with self._lock:
             chunk.status = CHUNK_MERGED
             job.merged_path = dataset.path
             job.merged_bytes = dataset.size_bytes
-            job.merge_speed_bps = (prefix.size_bytes + chunk.size_bytes) / elapsed
             self._store.save(job)
         for old in {previous, chunk.file_path} - {dataset.path}:
             Path(old).unlink(missing_ok=True)

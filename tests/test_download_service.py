@@ -129,23 +129,50 @@ def test_speed_is_measured_live_and_drops_while_nothing_arrives(env):
         assert time.monotonic() < deadline, "no progress reported"
         time.sleep(0.01)
 
-    now[0] = 1010.0  # 10 s after the download started
+    now[0] = 1002.0  # 2 s after the download started: the bytes are within the 2 s window
     job = service.get_progress(job)
     assert job.status == JOB_RUNNING
-    assert job.speed_bps == pytest.approx(20_000)          # bytes received over the network / 10 s
-    assert job.average_speed_bps == pytest.approx(20_000)
-    assert job.eta_seconds == pytest.approx((job.total_bytes - 300_000) / 30_000)  # from progress, not network
+    assert job.speed_bps == pytest.approx(100_000)          # bytes received over the network / 2 s
+    assert job.average_speed_bps == pytest.approx(100_000)
 
-    now[0] = 1040.0  # nothing more arrived for 40 s: the last burst has left the 20 s window
+    now[0] = 1010.0  # nothing more for 10 s: like Task Manager, the current speed is 0
     job = service.get_progress(job)
     assert job.speed_bps == 0
-    assert job.eta_seconds == pytest.approx((job.total_bytes - 300_000) / (300_000 / 40))  # 60 s window: steadier
+    assert job.average_speed_bps == pytest.approx(20_000)
+    assert job.eta_seconds == pytest.approx((job.total_bytes - 300_000) / 30_000)  # 20 s of progress: steadier
+
+    now[0] = 1040.0  # nothing for 40 s: no ETA any more
+    job = service.get_progress(job)
+    assert job.speed_bps == 0 and job.eta_seconds is None
     assert job.average_speed_bps == pytest.approx(200_000 / 40)
     assert [j.speed_bps for j in service.list_jobs()] == [0]
 
     data.gate.set()
     job = _wait(service, job, JOB_COMPLETED)
     assert job.speed_bps == 0 and job.average_speed_bps == 0
+
+
+def test_merging_speed_is_live_while_a_merge_runs(env, monkeypatch):
+    make, data, tmp_path = env
+    inside, release = threading.Event(), threading.Event()
+    original = ChunkMerger.merge
+
+    def slow_merge(self, chunks, output_path=None, on_progress=None):
+        on_progress(5_000_000)
+        inside.set()
+        release.wait(5)
+        return original(self, chunks, output_path)
+
+    monkeypatch.setattr(ChunkMerger, "merge", slow_merge)
+    service = make()
+    job = service.start_download(_form(tmp_path))
+    assert inside.wait(10), "the merge did not start"
+
+    assert service.get_progress(job).merge_speed_bps > 0  # while merging
+    release.set()
+    job = _wait(service, job, JOB_COMPLETED)
+    assert job.merge_speed_bps == 0                       # no merge running
+    assert service.list_jobs()[0].disk_bytes == 0         # only the running download is measured on disk
 
 
 # ------------------------------------------------------------------ the full download
@@ -177,7 +204,7 @@ def test_merged_file_grows_as_each_chunk_arrives(env, monkeypatch):
     merges = []
     original = ChunkMerger.merge
 
-    def recording_merge(self, chunks, output_path=None):
+    def recording_merge(self, chunks, output_path=None, on_progress=None):
         merges.append([(c.row_offset, c.height) for c in chunks])
         return original(self, chunks, output_path)
 
