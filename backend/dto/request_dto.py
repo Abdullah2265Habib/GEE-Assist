@@ -40,6 +40,8 @@ class FormDTO:
     # --- origin ---
     source: str = "form"                                # "form" | "nl"
     query_text: str = ""                                # original natural-language request
+    clarification: str = ""                             # LLM's question when the query is ambiguous (UC-02 7a)
+    notes: list[str] = field(default_factory=list)      # what could not be taken from the query, and why
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
