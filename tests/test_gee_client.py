@@ -16,7 +16,7 @@ from backend.data.clients.gee_client import NODATA, GEEClient  # noqa: E402
 from backend.data.clients.gee_tiles import plan_tiles  # noqa: E402
 from backend.data.data_facade import DataFacade  # noqa: E402
 from backend.dto import ChunkDTO, FormDTO  # noqa: E402
-from backend.exceptions import GEEError, GEESetupError, ValidationError  # noqa: E402
+from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError, ValidationError  # noqa: E402
 
 SQUARE = {"type": "Polygon", "coordinates": [[[73.0, 31.0], [73.1, 31.0], [73.1, 31.1], [73.0, 31.1], [73.0, 31.0]]]}
 
@@ -219,6 +219,7 @@ def test_missing_project_is_reported():
     ("Please authorize access to your Earth Engine account", "earthengine authenticate"),
     ("Project 'x' is not registered to use Earth Engine", "Register it"),
     ("Too many concurrent aggregations", "busy"),
+    ("User memory limit exceeded.", "Shorten the date range or use the mosaic composite"),
     ("Something else", "refused the request: Something else"),
 ])
 def test_earth_engine_errors_are_explained(raw, expected):
@@ -250,3 +251,8 @@ def test_setup_problems_are_not_retried(raw):
 def test_temporary_problems_are_retried():
     error = gee_module._error(Exception("Too many concurrent aggregations"), "x")
     assert type(error) is GEEError
+
+
+@pytest.mark.parametrize("raw", ["User memory limit exceeded.", "Computation timed out.", "Earth Engine capacity exceeded."])
+def test_too_heavy_requests_are_recognised(raw):
+    assert isinstance(gee_module._error(Exception(raw), "x"), GEERequestTooHeavyError)

@@ -50,7 +50,7 @@ from backend.dto.download_dto import (
     JOB_QUEUED,
     JOB_RUNNING,
 )
-from backend.exceptions import GeeAssistError, GEESetupError, ValidationError
+from backend.exceptions import GeeAssistError, GEERequestTooHeavyError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -269,8 +269,8 @@ class DownloadService(IDownloadService):
                     on_progress=lambda count, received: self._on_bytes(job, chunk, count, received),
                     should_stop=self._stop.is_set,
                 )
-            except (GEESetupError, ValidationError) as exc:
-                # Setup or request problem: retrying cannot help. Retry after fixing it.
+            except (GEESetupError, GEERequestTooHeavyError, ValidationError) as exc:
+                # Setup or request problem: retrying the same request cannot help. Retry after fixing it.
                 with self._lock:
                     chunk.status = CHUNK_FAILED
                     job.status = JOB_FAILED

@@ -28,7 +28,7 @@ from backend.dto.download_dto import (  # noqa: E402
     JOB_QUEUED,
     JOB_RUNNING,
 )
-from backend.exceptions import GEEError, GEESetupError, ValidationError  # noqa: E402
+from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError, ValidationError  # noqa: E402
 
 # 0.05 degree square at 10 m: 557 x 557 px, 1 band -> ~1.24 MB; with 1 MB chunks -> 2 chunks.
 AOI = {"type": "Polygon", "coordinates": [[[73.0, 31.0], [73.05, 31.0], [73.05, 31.05], [73.0, 31.05], [73.0, 31.0]]]}
@@ -267,6 +267,16 @@ def test_setup_problem_fails_at_once_without_retries(env):
 
     data.setup_error = None  # the user enabled the API
     assert _wait(service, service.retry_failed_chunks(job), JOB_COMPLETED).progress == 1.0
+
+
+def test_too_heavy_request_fails_at_once_without_retries(env):
+    make, data, tmp_path = env
+    data.setup_error = GEERequestTooHeavyError("Earth Engine ran out of memory computing this request.")
+    service = make()
+    job = _wait(service, service.start_download(_form(tmp_path)), JOB_FAILED)
+
+    assert data.calls == [1]  # the same request would fail again: no retries
+    assert "ran out of memory" in job.error and job.chunks[0].retries == 0
 
 
 def test_request_without_images_fails_at_once(env):

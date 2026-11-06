@@ -23,7 +23,7 @@ from backend.config import BYTES_PER_PIXEL, get_dataset
 from backend.data.clients.gee_tiles import TARGET_REQUEST_BYTES, Tile, plan_tiles
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.dto import ChunkDTO, FormDTO
-from backend.exceptions import GEEError, GEESetupError, ValidationError
+from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -251,9 +251,21 @@ class _TileProgress:
 
 # ----------------------------------------------------------------------------- errors
 def _error(exc: Exception, project: str) -> GEEError:
-    """GEESetupError for problems only the user can fix, GEEError (retried) for the rest."""
+    """GEESetupError for problems only the user can fix, GEERequestTooHeavyError when the request
+    needs too much memory or time, GEEError (retried) for the rest."""
     message = _explain(exc, project)
-    return GEESetupError(message) if _is_setup_problem(str(exc)) else GEEError(message)
+    if _is_setup_problem(str(exc)):
+        return GEESetupError(message)
+    if _is_too_heavy(str(exc)):
+        return GEERequestTooHeavyError(message)
+    return GEEError(message)
+
+
+def _is_too_heavy(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in (
+        "memory limit exceeded", "out of memory", "computation timed out", "capacity exceeded",
+    ))
 
 
 def _is_setup_problem(text: str) -> bool:
@@ -280,6 +292,11 @@ def _explain(exc: Exception, project: str) -> str:
         return (
             f"The Cloud project '{project}' cannot use Earth Engine. Register it at "
             "https://code.earthengine.google.com/register or set GEE_PROJECT to another project."
+        )
+    if _is_too_heavy(text):
+        return (
+            "Earth Engine ran out of memory computing this request. Shorten the date range or use "
+            f"the mosaic composite, then press Retry. ({text})"
         )
     if "too many" in lowered or "quota" in lowered or "rate limit" in lowered:
         return "Earth Engine is busy or the quota is used up. The download will retry; try again later if it keeps failing."
