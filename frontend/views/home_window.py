@@ -1,7 +1,7 @@
 """Window shown after signing in.
 
-A header (logo, navigation, the signed-in user and "Sign out") over three pages:
-the dashboard (start page), the query-input workspace and the account card.
+A header (logo, navigation, the signed-in user and "Sign out") over four pages:
+the dashboard (start page), the query-input workspace, downloads and the account card.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from frontend import theme
 from frontend.views.account_view import AccountView, Avatar
 from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
+from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.views.user_admin_view import UserAdminDialog
 
@@ -56,6 +57,8 @@ class HomeWindow(QMainWindow):
         self.dashboard_button = QPushButton("Dashboard", objectName="SecondaryButton")
         self.dashboard_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.dashboard_button.setToolTip("Back to the dashboard")
+        self.downloads_button = QPushButton("Downloads", objectName="SecondaryButton")
+        self.downloads_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.account_button = QPushButton("My account", objectName="SecondaryButton")
         self.account_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -65,6 +68,7 @@ class HomeWindow(QMainWindow):
         self.header_actions = QHBoxLayout()  # extra buttons go here
         self.header_actions.setSpacing(10)
         self.header_actions.addWidget(self.dashboard_button)
+        self.header_actions.addWidget(self.downloads_button)
         self.header_actions.addWidget(self.account_button)
         self.header_actions.addWidget(self.manage_users)
 
@@ -92,6 +96,7 @@ class HomeWindow(QMainWindow):
         # of its own; shown as a page it is embedded as a plain widget.
         self.query_input = MainWindow(facade)
         self.query_input.setWindowFlags(Qt.WindowType.Widget)
+        self.downloads = DownloadView(facade)
 
         self.account = AccountView(facade)
         account_page = QFrame(objectName="HomeContent")
@@ -116,6 +121,7 @@ class HomeWindow(QMainWindow):
         self.dashboard.setObjectName("DashboardPage")
         self.pages.addWidget(self.dashboard)
         self.pages.addWidget(self.query_input)
+        self.pages.addWidget(self.downloads)
         self.pages.addWidget(account_page)
         self._account_page = account_page
 
@@ -135,6 +141,9 @@ class HomeWindow(QMainWindow):
         self.dashboard_button.clicked.connect(self.show_dashboard)
         self.account_button.clicked.connect(self.show_account)
         self.dashboard.open_query_input.connect(self.show_query_input)
+        self.dashboard.open_downloads.connect(self.show_downloads)
+        self.downloads_button.clicked.connect(self.show_downloads)
+        self.query_input.download_requested.connect(self.start_download)
         self._admin_dialog: UserAdminDialog | None = None
         self.set_user(user)
         self.show_dashboard()
@@ -146,6 +155,14 @@ class HomeWindow(QMainWindow):
     def show_query_input(self) -> None:
         self._show_page(self.query_input)
 
+    def show_downloads(self) -> None:
+        self._show_page(self.downloads)
+
+    def start_download(self, form) -> None:
+        """Send a kept request to GEE and show its progress on the Downloads page."""
+        self.downloads.start(form)
+        self.show_downloads()
+
     def show_account(self) -> None:
         self._show_page(self._account_page)
 
@@ -155,6 +172,7 @@ class HomeWindow(QMainWindow):
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
         self.dashboard_button.setVisible(page is not self.dashboard)
+        self.downloads_button.setVisible(page is not self.downloads)
         self.account_button.setVisible(page is not self._account_page)
 
     def _open_user_admin(self) -> None:
