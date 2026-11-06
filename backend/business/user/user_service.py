@@ -23,13 +23,26 @@ T = TypeVar("T")
 
 # Refresh the access token this many seconds before it really expires.
 _EXPIRY_MARGIN_SECONDS = 30
+# Default length of a "Keep me signed in" session (SESSION_DURATION in .env).
+DEFAULT_SESSION_DURATION = 7 * 24 * 3600
 
 
 class UserService(IUserService):
-    def __init__(self, api: IAuthApiClient, session_store: ISessionStore, clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self,
+        api: IAuthApiClient,
+        session_store: ISessionStore,
+        clock: Callable[[], float] = time.monotonic,
+        session_duration: float = DEFAULT_SESSION_DURATION,
+        wall_clock: Callable[[], float] = time.time,
+    ):
+        """``clock`` times access tokens within this run; ``wall_clock`` (seconds since the
+        epoch) times the saved session across launches, which lasts ``session_duration`` seconds."""
         self._api = api
         self._store = session_store
         self._clock = clock
+        self._session_duration = session_duration
+        self._wall_clock = wall_clock
         self._lock = threading.RLock()  # workers may call the service from several threads
 
         self._user: UserDTO | None = None
@@ -56,6 +69,10 @@ class UserService(IUserService):
     def restore_session(self) -> UserDTO | None:
         refresh_token = self._store.load_refresh_token()
         if not refresh_token:
+            return None
+        expires_at = self._store.load_expiry()
+        if expires_at is None or self._wall_clock() >= expires_at:
+            self._store.clear()  # "Keep me signed in" has run out: sign in again
             return None
         try:
             tokens = self._api.refresh(refresh_token)
@@ -138,7 +155,10 @@ class UserService(IUserService):
         with self._lock:
             self._set_tokens(login_response, remember)
             self._user = user
-        if not remember:
+        if remember:
+            # Counted from this sign-in; refreshing tokens later does not extend it.
+            self._store.save_expiry(self._wall_clock() + self._session_duration)
+        else:
             self._store.clear()  # don't keep a session saved by an earlier "Keep me signed in"
         return user
 

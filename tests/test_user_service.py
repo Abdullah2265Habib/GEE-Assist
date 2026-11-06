@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from backend.auth_exceptions import AccountDisabledError, AuthError, ServerUnavailableError, SessionExpiredError
@@ -58,6 +60,12 @@ class Clock:
         return self.now
 
 
+def _save_session(store, expires_in=3600.0):
+    """A session saved by an earlier "Keep me signed in" that has not run out yet."""
+    store.save_refresh_token("refresh1")
+    store.save_expiry(time.time() + expires_in)
+
+
 @pytest.fixture
 def setup():
     api, store, clock = FakeApi(), MemorySessionStore(), Clock()
@@ -113,7 +121,7 @@ def test_failed_refresh_logs_out(setup):
 
 def test_restore_session_uses_saved_refresh_token(setup):
     service, _, store, _ = setup
-    store.save_refresh_token("refresh1")
+    _save_session(store)
     user = service.restore_session()
     assert user.username == "abdullah"
     assert store.load_refresh_token() == "refresh2"  # the new refresh token is saved
@@ -127,7 +135,7 @@ def test_restore_session_without_saved_token(setup):
 @pytest.mark.parametrize("error", [SessionExpiredError("x", 401), AccountDisabledError("x", 403)])
 def test_restore_session_forgets_rejected_token(setup, error):
     service, api, store, _ = setup
-    store.save_refresh_token("refresh1")
+    _save_session(store)
     api.refresh_error = error
     assert service.restore_session() is None
     assert store.load_refresh_token() is None
@@ -135,7 +143,7 @@ def test_restore_session_forgets_rejected_token(setup, error):
 
 def test_restore_session_keeps_token_when_offline(setup):
     service, api, store, _ = setup
-    store.save_refresh_token("refresh1")
+    _save_session(store)
     api.refresh_error = ServerUnavailableError("offline")
     with pytest.raises(ServerUnavailableError):
         service.restore_session()
@@ -160,3 +168,59 @@ def test_invalid_role_is_rejected(setup):
     service.log_in("abdullah", "secret123")
     with pytest.raises(AuthError):
         service.set_user_role("u2", "superuser")
+
+
+# ------------------------------------------------------------- "keep me signed in" duration
+SESSION = 120.0  # two minutes
+
+
+@pytest.fixture
+def timed():
+    """A service whose saved sessions last SESSION seconds, with a controllable wall clock."""
+    api, store, wall = FakeApi(), MemorySessionStore(), Clock()
+    wall.now = 1_700_000_000.0
+    service = UserService(api, store, Clock(), session_duration=SESSION, wall_clock=wall)
+    return service, store, wall
+
+
+def test_remembered_login_saves_when_the_session_runs_out(timed):
+    service, store, wall = timed
+    service.log_in("abdullah", "secret123", remember=True)
+    assert store.load_expiry() == wall.now + SESSION
+
+
+def test_login_without_remember_saves_no_expiry(timed):
+    service, store, _ = timed
+    service.log_in("abdullah", "secret123")
+    assert store.load_expiry() is None
+
+
+def test_session_is_restored_before_it_runs_out(timed):
+    service, store, wall = timed
+    service.log_in("abdullah", "secret123", remember=True)
+    wall.now += SESSION - 1
+    assert service.restore_session().username == "abdullah"
+
+
+def test_session_that_ran_out_needs_a_new_sign_in(timed):
+    service, store, wall = timed
+    service.log_in("abdullah", "secret123", remember=True)
+    wall.now += SESSION
+    assert service.restore_session() is None
+    assert store.load_refresh_token() is None and store.load_expiry() is None
+
+
+def test_restoring_does_not_extend_the_session(timed):
+    service, store, wall = timed
+    service.log_in("abdullah", "secret123", remember=True)
+    expires_at = store.load_expiry()
+    wall.now += 60
+    service.restore_session()
+    assert store.load_expiry() == expires_at
+
+
+def test_saved_session_without_expiry_needs_a_new_sign_in(timed):
+    service, store, _ = timed
+    store.save_refresh_token("refresh1")  # saved before sessions had a time limit
+    assert service.restore_session() is None
+    assert store.load_refresh_token() is None

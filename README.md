@@ -19,7 +19,7 @@ Desktop app (PyQt6) for querying and analysing Google Earth Engine data.
    python -m venv .venv
    .venv\Scripts\activate
    pip install -r requirements.txt
-   copy .env.example .env      # set AUTH_API_URL if the server is not on localhost:8000
+   copy .env.example .env      # set GEMINI_API_KEY; AUTH_API_URL if the server is not on localhost:8000
    python main.py
    ```
 
@@ -32,8 +32,12 @@ Run the tests with `python -m pytest`.
 - The sign-in screen offers username/password sign-in, sign-up and Google sign-in.
 - New accounts must verify their email. The app waits on a "Check your email" screen (resend,
   change email) and signs the user in as soon as the link is opened.
-- **Keep me signed in** stores the refresh token in the Windows Credential Manager (via `keyring`),
-  so the next launch signs in automatically.
+- **Keep me signed in** (ticked by default) stores the refresh token in the Windows Credential
+  Manager (via `keyring`), so the next launch goes straight to the dashboard. The saved session
+  lasts `SESSION_DURATION` from `.env` (e.g. `7d`, `12h`, `2m`), counted from signing in; after that
+  the app asks to sign in again.
+- After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
+  form (with the "Chat with Gemini" assistant); **Dashboard** in the header returns to it.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
 
 ### Where the code is
@@ -49,3 +53,5 @@ Run the tests with `python -m pytest`.
 | Sign-in / sign-up screens | `frontend/views/auth/` |
 | Theme (colours, fonts, styles) | `frontend/theme.py` |
 | Admin user management | `frontend/views/user_admin_view.py` |
+| Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
+| Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |

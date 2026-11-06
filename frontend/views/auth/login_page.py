@@ -27,7 +27,11 @@ class LoginPage(AuthPage):
         self.password = PasswordField("Password", "Your password")
         self.remember = QCheckBox("Keep me signed in")
         self.remember.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.remember.setToolTip("Stay signed in on this computer. The session is kept in Windows Credential Manager.")
+        self.remember.setChecked(True)  # reopening the app skips sign-in until the session runs out
+        self.remember.setToolTip(
+            "Stay signed in on this computer for a limited time (SESSION_DURATION in .env). "
+            "The session is kept in Windows Credential Manager."
+        )
 
         self.submit = BusyButton("Sign in", "Signing in…")
         self.google = QPushButton("  Continue with Google", objectName="SecondaryButton")
