@@ -23,3 +23,6 @@ CRS_OPTIONS: tuple[tuple[str, str], ...] = (
 GEE_MAX_REQUEST_BYTES = 48 * 1024 * 1024   # 50 331 648 bytes
 GEE_MAX_GRID_DIMENSION = 32_768            # pixels per side
 BYTES_PER_PIXEL = 4                        # bands are exported as float32
+# GEE's request-size check counts 5 bytes per pixel and band: the float32 value plus a
+# 1-byte mask (a 6605 x 342 px, 5-band tile is reported as 56 472 750 bytes).
+GEE_REQUEST_BYTES_PER_PIXEL = 5
