@@ -57,6 +57,10 @@ How it works:
 - The request is split into **chunks of 500 MB** (`workspace/download_settings.json`, or
   **Change…** on the Downloads page; applies to new downloads). A 2 GB dataset is 4 chunks.
 - Each chunk is fetched from GEE as several requests under GEE's 48 MB limit.
+- If GEE runs out of memory on a request (e.g. a median over many years), that request is
+  fetched as four smaller ones, split again if needed, and the rest of the download starts at
+  that size. If even small requests fail, the download stops with a message: shorten the date
+  range or use the mosaic composite, then press **Retry**.
 - Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
 - The result is `<output folder>/<name>/<name>.tif`, where `<name>` is
   `<satellite>_<lon>_<lat>_<started>`: the centre of the AOI and when the download was started, e.g.
