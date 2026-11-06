@@ -289,13 +289,12 @@ class DownloadView(QWidget):
         speed = running.speed_bps if running else 0.0
         self.chart.add_sample(speed, running.average_speed_bps if running else 0.0)
         self._peak = max(self._peak, speed)
-        active = [job for job in jobs if job.status != JOB_COMPLETED]
         merge_speed = next((job.merge_speed_bps for job in reversed(jobs) if job.merge_speed_bps), 0.0)
         values = {
             "CURRENT": format_speed(speed),
             "PEAK": format_speed(self._peak),
             "DOWNLOADED": format_size(running.received_bytes) if running else NONE,  # current download only
-            "REMAINING": format_size(sum(max(0, job.total_bytes - job.downloaded_bytes) for job in active)),
+            "REMAINING": format_size(max(0, running.total_bytes - running.downloaded_bytes)) if running else NONE,
             "DISK USAGE": format_size(running.disk_bytes) if running else NONE,
             "MERGING SPEED": format_speed(merge_speed),
         }

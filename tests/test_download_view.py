@@ -103,6 +103,7 @@ def test_statistics_follow_the_running_download(view, facade):
              speed_bps=1_500_000, average_speed_bps=1_200_000, merge_speed_bps=3_200_000),
         _job("2", "completed", downloaded_bytes=1_000_000_000, received_bytes=950_000_000, disk_bytes=900_000_000,
              dataset=DatasetDTO(id="2", source="", path="x.tif", size_bytes=900_000_000)),  # history: not counted
+        _job("3", "paused", downloaded_bytes=100_000_000),  # not running: not counted
     ]
     view.refresh()
 
@@ -128,7 +129,7 @@ def test_speed_chart_keeps_the_last_minute_of_real_time(app):
     chart.grab()  # paints without errors
 
 
-def test_downloaded_and_disk_usage_are_empty_without_a_running_download(view, facade):
+def test_download_figures_are_empty_without_a_running_download(view, facade):
     facade.list_downloads.return_value = [
         _job("1", "paused", received_bytes=300_000_000, disk_bytes=320_000_000),
         _job("2", "completed", received_bytes=950_000_000, disk_bytes=900_000_000),
@@ -136,6 +137,7 @@ def test_downloaded_and_disk_usage_are_empty_without_a_running_download(view, fa
     view.refresh()
     assert view.stats["DOWNLOADED"].text() == "–"
     assert view.stats["DISK USAGE"].text() == "–"
+    assert view.stats["REMAINING"].text() == "–"
 
 
 # ------------------------------------------------------------------ buttons
