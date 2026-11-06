@@ -58,3 +58,23 @@ class ChunkDTO:
         values["bounds"] = tuple(values["bounds"])
         values["transform"] = tuple(values["transform"])
         return cls(**values, request=request)
+
+
+@dataclass
+class DatasetDTO:
+    """Domain model: Dataset. A downloaded raster ready for analysis (UC-06)."""
+
+    id: str
+    source: str                   # GEE collection id, e.g. COPERNICUS/S2_SR_HARMONIZED
+    path: str                     # the GeoTIFF on disk
+    data_type: str = "GeoTIFF"
+    bands: list[str] = field(default_factory=list)
+    time_periods: int = 1         # composites over the date range count as one period
+    size_bytes: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DatasetDTO":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
