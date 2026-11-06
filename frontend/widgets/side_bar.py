@@ -83,7 +83,7 @@ class SideBar(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SIDE_MARGIN, 18, SIDE_MARGIN, 18)
         layout.setSpacing(18)
-        layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignLeft)  # stays put while the bar slides
         layout.addLayout(self._items)
         layout.addStretch(1)
         layout.addLayout(self._footer)

@@ -11,7 +11,7 @@ from PyQt6.QtGui import QPixmap  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QLabel  # noqa: E402
 
-from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, SLIDE_MS, SideBar  # noqa: E402
+from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, SIDE_MARGIN, SLIDE_MS, SideBar  # noqa: E402
 
 
 class CompactLabel(QLabel):
@@ -104,3 +104,12 @@ def test_footer_buttons_sit_below_the_navigation(bar):
     sign_out = bar.add_button("Sign out", "S", footer=True)
     bar.show()
     assert sign_out.y() > downloads.y() + downloads.height()
+
+
+def test_logo_stays_on_the_left_expanded_and_collapsed(bar):
+    bar.show()
+    assert bar.logo.x() == SIDE_MARGIN
+    bar.set_expanded(False, animate=False)
+    QApplication.processEvents()
+    assert bar.logo.x() == SIDE_MARGIN
+    assert bar.logo.x() + bar.logo.width() <= COLLAPSED_WIDTH  # fits the collapsed bar
