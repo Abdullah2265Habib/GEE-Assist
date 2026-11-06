@@ -11,3 +11,7 @@ class ValidationError(GeeAssistError):
 
 class AOIImportError(GeeAssistError):
     """GeoJSON file is unsupported or invalid (UC-04 6a / 6b)."""
+
+
+class LLMServiceError(GeeAssistError):
+    """Gemini is not configured, failed, or returned an unusable answer (Interpret Query)."""
