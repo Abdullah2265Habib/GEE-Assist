@@ -113,7 +113,7 @@ class DownloadService(IDownloadService):
         parent = Path(form.output_dir) if form.output_dir else self._download_dir
         started = datetime.now()
         with self._lock:
-            folder = unique_folder(parent, dataset_folder_name(form, started))  # same second: name_2
+            folder = unique_folder(parent, dataset_folder_name(form))  # the same request again: name_2
             for chunk in chunks:
                 chunk.file_path = str(folder / CHUNKS_FOLDER / f"chunk_{chunk.id:03d}.tif")
             job = DownloadJobDTO(
