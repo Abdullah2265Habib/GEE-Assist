@@ -18,6 +18,7 @@ def build_business_facade() -> IBusinessFacade:
     user_service = UserService(
         api=AuthApiClient(settings.auth_api_url, timeout=settings.auth_api_timeout),
         session_store=KeyringSessionStore(settings.keyring_service),
+        session_duration=settings.session_duration,
     )
 
     llm = load_llm_settings()
