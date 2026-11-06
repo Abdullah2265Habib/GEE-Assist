@@ -97,3 +97,10 @@ def test_reversing_mid_slide_ends_at_the_new_width(bar):
     bar.logo.click()                          # open again before it finished
     _wait_for_slide(bar)
     assert bar.is_expanded() and bar.width() == EXPANDED_WIDTH and downloads.text() == "Downloads"
+
+
+def test_footer_buttons_sit_below_the_navigation(bar):
+    downloads = bar.add_button("Downloads", "D")
+    sign_out = bar.add_button("Sign out", "S", footer=True)
+    bar.show()
+    assert sign_out.y() > downloads.y() + downloads.height()

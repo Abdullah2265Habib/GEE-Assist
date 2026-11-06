@@ -91,9 +91,9 @@ class SideBar(QFrame):
         self._update_logo_tip()
 
     # ------------------------------------------------------------- contents
-    def add_button(self, text: str, short: str) -> SideButton:
+    def add_button(self, text: str, short: str, footer: bool = False) -> SideButton:
         button = SideButton(text, short)
-        self.add_widget(button)
+        self.add_widget(button, footer)
         return button
 
     def add_widget(self, widget: QWidget, footer: bool = False) -> None:
