@@ -72,7 +72,7 @@ def test_navigation_is_in_a_side_bar_without_the_app_name(home):
     texts = [label.text() for label in home.findChildren(QLabel)]
     assert "GEE-Assist" not in texts  # only the logo
     assert home.downloads_button.parent() is home.side_bar
-    assert home.side_bar.logo.iconSize().width() == 48  # larger than the old 36 px header logo
+    assert home.side_bar.logo.iconSize().width() == 64  # larger than the old 36 px header logo
 
 
 def test_collapsed_side_bar_shows_short_labels(home):

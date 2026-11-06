@@ -20,11 +20,12 @@ from PyQt6.QtWidgets import QFrame, QPushButton, QSizePolicy, QToolButton, QVBox
 
 from frontend import theme
 
-COLLAPSED_WIDTH = 76
+LOGO_SIZE = 64
+SIDE_MARGIN = 12
+COLLAPSED_WIDTH = LOGO_SIZE + 2 * SIDE_MARGIN   # just wide enough for the logo
 EXPANDED_WIDTH = 220
 SLIDE_MS = 220
 FRAME_MS = 15     # about 60 frames a second
-LOGO_SIZE = 48
 
 STYLESHEET = f"""
 #SideBar {{ background: {theme.WHITE}; border: none; border-right: 1px solid {theme.BORDER}; }}
@@ -80,7 +81,7 @@ class SideBar(QFrame):
         self._footer = QVBoxLayout()
         self._footer.setSpacing(6)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 18, 12, 18)
+        layout.setContentsMargins(SIDE_MARGIN, 18, SIDE_MARGIN, 18)
         layout.setSpacing(18)
         layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addLayout(self._items)
