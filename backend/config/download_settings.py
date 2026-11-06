@@ -31,7 +31,8 @@ MAX_CHUNK_SIZE_MB = 100 * 1024     # 100 GB
 DEFAULT_RETRY_LIMIT = 3            # attempts per chunk before the job is marked failed
 MAX_RETRY_LIMIT = 20
 
-BYTES_PER_MB = 1024 * 1024
+# Decimal units, as storage is usually labelled: 2 GB = 2000 MB = 4 chunks of 500 MB.
+BYTES_PER_MB = 1_000_000
 
 
 @dataclass(frozen=True)
