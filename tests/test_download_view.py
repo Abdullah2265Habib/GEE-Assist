@@ -98,13 +98,18 @@ def test_empty_sections_say_so(view):
 
 
 def test_statistics_follow_the_running_download(view, facade):
-    facade.list_downloads.return_value = [_job("1", "running", downloaded_bytes=740_000_000, speed_bps=1_500_000,
-                                               average_speed_bps=1_200_000, merge_speed_bps=3_200_000)]
+    facade.list_downloads.return_value = [
+        _job("1", "running", downloaded_bytes=740_000_000, received_bytes=612_000_000, disk_bytes=700_000_000,
+             speed_bps=1_500_000, average_speed_bps=1_200_000, merge_speed_bps=3_200_000),
+        _job("2", "completed", downloaded_bytes=1_000_000_000, disk_bytes=900_000_000,  # finished before
+             dataset=DatasetDTO(id="2", source="", path="x.tif", size_bytes=900_000_000)),  # received was recorded
+    ]
     view.refresh()
 
     assert view.stats["CURRENT"].text() == "1.5 MB/s"
     assert view.stats["PEAK"].text() == "1.5 MB/s"
-    assert view.stats["DOWNLOADED"].text() == "740.0 MB"
+    assert view.stats["DOWNLOADED"].text() == "1.5 GB"      # 612 MB received + 900 MB file
+    assert view.stats["DISK USAGE"].text() == "1.6 GB"      # what is on disk now
     assert view.stats["REMAINING"].text() == "260.0 MB"
     assert view.stats["MERGING SPEED"].text() == "3.2 MB/s"
     assert view.chunk_setting.text() == "Chunk size: 500 MB"

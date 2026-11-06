@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
 from backend.business.facade import IBusinessFacade
 from backend.config.download_settings import MAX_CHUNK_SIZE_MB, MIN_CHUNK_SIZE_MB
 from backend.dto import DownloadJobDTO, FormDTO
-from backend.dto.download_dto import CHUNK_MERGED, JOB_COMPLETED, JOB_FAILED, JOB_PAUSED, JOB_QUEUED, JOB_RUNNING
+from backend.dto.download_dto import JOB_COMPLETED, JOB_FAILED, JOB_PAUSED, JOB_QUEUED, JOB_RUNNING
 from backend.exceptions import GeeAssistError
 from frontend import form_theme, theme
 from frontend.download_format import format_size, format_speed
@@ -289,18 +289,13 @@ class DownloadView(QWidget):
         self.chart.add_sample(speed, running.average_speed_bps if running else 0.0)
         self._peak = max(self._peak, speed)
         active = [job for job in jobs if job.status != JOB_COMPLETED]
-        on_disk = sum(job.dataset.size_bytes for job in jobs if job.status == JOB_COMPLETED and job.dataset)
-        on_disk += sum(
-            job.merged_bytes + sum(c.downloaded_bytes for c in job.chunks if c.status != CHUNK_MERGED)
-            for job in active
-        )
         merge_speed = next((job.merge_speed_bps for job in reversed(jobs) if job.merge_speed_bps), 0.0)
         values = {
             "CURRENT": format_speed(speed),
             "PEAK": format_speed(self._peak),
-            "DOWNLOADED": format_size(sum(job.downloaded_bytes for job in jobs)),
+            "DOWNLOADED": format_size(sum(_received(job) for job in jobs)),
             "REMAINING": format_size(sum(max(0, job.total_bytes - job.downloaded_bytes) for job in active)),
-            "DISK USAGE": format_size(on_disk),
+            "DISK USAGE": format_size(sum(job.disk_bytes for job in jobs)),
             "MERGING SPEED": format_speed(merge_speed),
         }
         for name, value in values.items():
@@ -340,3 +335,10 @@ class DownloadView(QWidget):
         section, row = self._rows.pop(job_id)
         section.rows.removeWidget(row)
         row.deleteLater()
+
+
+def _received(job: DownloadJobDTO) -> int:
+    """Bytes received from GEE. Downloads finished before this was recorded count their file size."""
+    if job.received_bytes == 0 and job.status == JOB_COMPLETED and job.dataset:
+        return job.dataset.size_bytes
+    return job.received_bytes
