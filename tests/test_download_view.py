@@ -140,6 +140,18 @@ def test_download_figures_are_empty_without_a_running_download(view, facade):
     assert view.stats["REMAINING"].text() == "–"
 
 
+def test_merging_speed_is_only_for_a_merge_running_now(view, facade):
+    facade.list_downloads.return_value = [_job("1", "completed", merge_speed_bps=5_000_000)]  # an old value
+    view.refresh()
+    assert view.stats["MERGING SPEED"].text() == "0 B/s"
+
+
+def test_speed_graph_keeps_sampling_while_the_page_is_hidden(view):
+    view.show()
+    view.hide()
+    assert view._timer.isActive()
+
+
 # ------------------------------------------------------------------ buttons
 def test_row_buttons_match_the_job_state(app):
     running, paused, failed = JobRow(_job("1", "running")), JobRow(_job("2", "paused")), JobRow(_job("3", "failed"))

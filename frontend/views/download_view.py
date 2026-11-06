@@ -5,7 +5,8 @@ Sections:
   PAUSED             paused or failed downloads (Start resumes, Retry retries failed chunks)
   COMPLETED HISTORY  finished downloads; the green button opens the dataset folder
 
-The page polls the facade twice a second while it is visible.
+The page polls the facade twice a second, also while it is hidden, so the speed graph
+keeps a continuous history (like Task Manager).
 """
 
 from __future__ import annotations
@@ -132,6 +133,7 @@ class DownloadView(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(REFRESH_MS)
         self._timer.timeout.connect(self.refresh)
+        self._timer.start()
 
     # ------------------------------------------------------------- building
     def _build_stats(self) -> QFrame:
@@ -187,12 +189,7 @@ class DownloadView(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().showEvent(event)
         self.refresh()
-        self._timer.start()
         self.check_connection()  # again on every visit, so fixing the setup shows up
-
-    def hideEvent(self, event) -> None:  # noqa: N802 (Qt API)
-        super().hideEvent(event)
-        self._timer.stop()
 
     # ------------------------------------------------------------- actions
     def start(self, form: FormDTO) -> None:
@@ -289,7 +286,7 @@ class DownloadView(QWidget):
         speed = running.speed_bps if running else 0.0
         self.chart.add_sample(speed, running.average_speed_bps if running else 0.0)
         self._peak = max(self._peak, speed)
-        merge_speed = next((job.merge_speed_bps for job in reversed(jobs) if job.merge_speed_bps), 0.0)
+        merge_speed = running.merge_speed_bps if running else 0.0  # 0 while nothing is being merged
         values = {
             "CURRENT": format_speed(speed),
             "PEAK": format_speed(self._peak),
