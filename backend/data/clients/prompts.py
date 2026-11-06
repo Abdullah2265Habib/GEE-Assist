@@ -57,4 +57,8 @@ Rules:
   ambiguous, otherwise "". If the request is not about satellite data, leave every other
   field empty and explain in clarification.
 - Never invent datasets, bands or processes outside the lists above.
+- The request may end with "Entities recognised in this request": these come from a classifier run
+  on the user's text. Treat DATASET, PROCESS, BAND, CLOUD_COVER, RESOLUTION and COMPOSITE entries as
+  the user's explicit choices, use PLACE entries for aoi_name / aoi_bbox, and use a DATE value
+  (YYYY-MM-DD/YYYY-MM-DD) when one is given.
 """
