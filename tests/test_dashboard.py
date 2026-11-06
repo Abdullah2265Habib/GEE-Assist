@@ -9,9 +9,11 @@ from unittest.mock import MagicMock  # noqa: E402
 import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
+from PyQt6.QtCore import pyqtSignal  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QMainWindow  # noqa: E402
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
+from backend.dto import FormDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
 from frontend.views import home_window  # noqa: E402
 from frontend.views.home_window import HomeWindow  # noqa: E402
@@ -19,6 +21,8 @@ from frontend.views.home_window import HomeWindow  # noqa: E402
 
 class StubQueryWorkspace(QMainWindow):
     """Stands in for the parameter form, whose web map cannot start in a headless test run."""
+
+    download_requested = pyqtSignal(object)
 
     def __init__(self, facade):
         super().__init__()
@@ -36,7 +40,10 @@ def _user(role: str = "user") -> UserDTO:
 @pytest.fixture
 def home(app, monkeypatch):
     monkeypatch.setattr(home_window, "MainWindow", StubQueryWorkspace)
-    window = HomeWindow(MagicMock(spec=IBusinessFacade), _user())
+    facade = MagicMock(spec=IBusinessFacade)
+    facade.list_downloads.return_value = []
+    facade.get_chunk_size_mb.return_value = 500
+    window = HomeWindow(facade, _user())
     yield window
     window.deleteLater()
 
@@ -71,7 +78,26 @@ def test_account_page_is_reachable_from_the_header(home):
 
 def test_unbuilt_workspaces_are_disabled_placeholders(home):
     grid = home.dashboard.findChildren(type(home.dashboard.query_tile))
-    placeholders = [tile for tile in grid if tile is not home.dashboard.query_tile]
+    active = (home.dashboard.query_tile, home.dashboard.download_tile)
+    placeholders = [tile for tile in grid if tile not in active]
 
-    assert len(placeholders) == 3
+    assert len(placeholders) == 2  # Analysis and Reports
     assert all(not tile.isEnabled() and tile.button is None for tile in placeholders)
+
+
+def test_download_card_opens_the_downloads_page(home):
+    home.dashboard.download_tile.button.click()
+
+    assert home.current_page() is home.downloads
+    assert home.downloads_button.isHidden() and not home.dashboard_button.isHidden()
+
+
+def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, monkeypatch):
+    started = []
+    monkeypatch.setattr(home.downloads, "start", started.append)
+    form = FormDTO(dataset="sentinel2_sr", aoi="{}")
+
+    home.query_input.download_requested.emit(form)
+
+    assert started == [form]
+    assert home.current_page() is home.downloads
