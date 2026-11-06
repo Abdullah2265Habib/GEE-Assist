@@ -27,6 +27,7 @@ class DatasetInfo:
     default_bands: tuple[str, ...]
     supported_analyses: dict[str, tuple[str, ...]] = field(default_factory=dict)
     supports_cloud_filter: bool = False
+    cloud_property: str = ""                 # image property the cloud filter compares
     default_composite: str = "median"
     min_date: date = date(1984, 1, 1)
     max_date: Optional[date] = None          # None = still acquiring
@@ -74,6 +75,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("B2", "B3", "B4", "B8", "B11"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION},
         supports_cloud_filter=True,
+        cloud_property="CLOUDY_PIXEL_PERCENTAGE",
         min_date=date(2017, 3, 28),
     ),
     DatasetInfo(
@@ -86,6 +88,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("B2", "B3", "B4", "B8", "B11"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION},
         supports_cloud_filter=True,
+        cloud_property="CLOUDY_PIXEL_PERCENTAGE",
         min_date=date(2015, 6, 27),
     ),
     DatasetInfo(
@@ -98,6 +101,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(2021, 10, 31),
     ),
     DatasetInfo(
@@ -110,6 +114,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(2013, 3, 18),
     ),
     DatasetInfo(
@@ -122,6 +127,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(1999, 5, 28),
     ),
     DatasetInfo(
@@ -134,6 +140,7 @@ _DATASET_LIST: tuple[DatasetInfo, ...] = (
         default_bands=("SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5"),
         supported_analyses={"Water": _WATER, "Vegetation": _VEGETATION, "LST": _LST},
         supports_cloud_filter=True,
+        cloud_property="CLOUD_COVER",
         min_date=date(1984, 3, 16),
         max_date=date(2012, 5, 5),
     ),
