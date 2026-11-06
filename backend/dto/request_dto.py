@@ -61,3 +61,14 @@ class FormDTO:
             if data[key] is not None:
                 data[key] = data[key].isoformat()
         return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FormDTO":
+        """Inverse of ``to_dict`` (used to reload saved download jobs). Unknown keys are ignored."""
+        known = {f for f in cls.__dataclass_fields__}
+        values = {k: v for k, v in data.items() if k in known}
+        for key in ("start_date", "end_date"):
+            if isinstance(values.get(key), str):
+                values[key] = date.fromisoformat(values[key])
+        values["entities"] = [EntityDTO(**e) if isinstance(e, dict) else e for e in values.get("entities", [])]
+        return cls(**values)
