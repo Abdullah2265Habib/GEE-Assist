@@ -1,9 +1,9 @@
 """Window shown after signing in.
 
-A side bar on the left (logo, navigation, the signed-in user and "Sign out") next to
+A side bar on the left (logo, navigation and the signed-in user) next to
 four pages: the dashboard (start page), the query-input workspace, downloads and the
 account card. Clicking the logo slides the side bar open or closed; clicking the user
-opens the account menu.
+opens the account menu (account options and "Sign out").
 """
 
 from __future__ import annotations
@@ -105,7 +105,6 @@ class HomeWindow(QMainWindow):
         self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
         self.profile = ProfileButton()
         self.side_bar.add_widget(self.profile, footer=True)
-        self.sign_out_button = self.side_bar.add_button("Sign out", "S", footer=True)
 
         # ---- account menu
         self.account_menu = QMenu(self)
@@ -114,8 +113,11 @@ class HomeWindow(QMainWindow):
         self.manage_account_action.setEnabled(False)
         self.view_account_action = QAction("View account", self)
         self.signup_details_action = QAction("Sign-up details", self)
+        self.sign_out_action = QAction("Sign out", self)
         for action in (self.manage_account_action, self.view_account_action, self.signup_details_action):
             self.account_menu.addAction(action)
+        self.account_menu.addSeparator()
+        self.account_menu.addAction(self.sign_out_action)
 
         # ---- pages
         self.dashboard = DashboardView()
@@ -161,7 +163,7 @@ class HomeWindow(QMainWindow):
         layout.addWidget(self.pages, 1)
         self.setCentralWidget(root)
 
-        self.sign_out_button.clicked.connect(lambda: self.signed_out.emit("You have been signed out."))
+        self.sign_out_action.triggered.connect(lambda: self.signed_out.emit("You have been signed out."))
         self.account.session_expired.connect(
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
