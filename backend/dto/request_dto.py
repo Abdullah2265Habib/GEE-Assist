@@ -5,6 +5,17 @@ from datetime import date
 from typing import Any, Optional
 
 
+@dataclass(frozen=True)
+class EntityDTO:
+    """A named entity recognised in a natural-language query."""
+
+    label: str        # PLACE | DATE | DATASET | PROCESS | ANALYSIS | BAND | CLOUD_COVER | RESOLUTION | COMPOSITE
+    text: str         # the words as the user wrote them
+    value: str = ""   # normalised value: dataset key, process name, "20", "2024-06-01/2024-08-31", ...
+    start: int = 0    # character offsets in the query
+    end: int = 0
+
+
 @dataclass
 class FormDTO:
     """Structured parameters GEE needs to fetch data (domain model: DataRequest).
@@ -42,6 +53,7 @@ class FormDTO:
     query_text: str = ""                                # original natural-language request
     clarification: str = ""                             # LLM's question when the query is ambiguous (UC-02 7a)
     notes: list[str] = field(default_factory=list)      # what could not be taken from the query, and why
+    entities: list[EntityDTO] = field(default_factory=list)  # named entities found in the query
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
