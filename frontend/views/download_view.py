@@ -101,6 +101,7 @@ class DownloadView(QWidget):
             objectName="PageSubtitle",
         )
         self.banner = StatusBanner()
+        self.banner.setContentsMargins(10, 6, 10, 6)  # wrapped labels ignore stylesheet padding
 
         content = QWidget()
         column = QVBoxLayout(content)
