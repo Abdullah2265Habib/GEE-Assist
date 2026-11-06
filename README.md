@@ -67,8 +67,9 @@ How it works:
   range or use the mosaic composite, then press **Retry**.
 - Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
 - The result is `<output folder>/<name>/<name>.tif`, where `<name>` is
-  `<satellite>_<lon>_<lat>_<started>`: the centre of the AOI and when the download was started, e.g.
-  `Sentinel-2_73.8231_33.2334_2026-11-06_21-30-15/Sentinel-2_73.8231_33.2334_2026-11-06_21-30-15.tif`.
+  `<satellite>_<lon>_<lat>_<start date>_<end date>`: the centre of the AOI and the request's dates, e.g.
+  `Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31/Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31.tif`.
+  The same request downloaded again gets `_2`, `_3`, ... at the end.
 - Pause keeps finished parts; Start continues where it stopped, even after closing the app.
   Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
 
