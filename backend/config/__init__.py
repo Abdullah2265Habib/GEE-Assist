@@ -18,6 +18,11 @@ from backend.config.download import (
     GEE_MAX_GRID_DIMENSION,
     GEE_MAX_REQUEST_BYTES,
 )
+from backend.config.download_settings import (
+    DEFAULT_CHUNK_SIZE_MB,
+    DownloadSettings,
+    DownloadSettingsStore,
+)
 
 __all__ = [
     "ANALYSIS_CATEGORIES",
@@ -29,7 +34,10 @@ __all__ = [
     "DATASET_ALIASES",
     "DATASET_CATEGORIES",
     "DATASETS",
+    "DEFAULT_CHUNK_SIZE_MB",
     "DEFAULT_DOWNLOAD_DIR",
+    "DownloadSettings",
+    "DownloadSettingsStore",
     "DatasetInfo",
     "GEE_MAX_GRID_DIMENSION",
     "GEE_MAX_REQUEST_BYTES",
