@@ -5,6 +5,11 @@ limit, see ``gee_tiles``) on the chunk's own pixel grid, and the tiles are writt
 into one GeoTIFF. Finished tiles are listed in ``<chunk>.tiles.json`` next to the
 file, so a paused or interrupted chunk continues with the next tile.
 
+If Earth Engine runs out of memory or time on a tile, the tile is fetched as four
+quarters instead (and those split again if needed, down to ``MIN_SPLIT_PIXELS``)
+and stitched back together. Later tiles of the same request start at that smaller
+size, so they do not fail first.
+
 Earth Engine must be signed in once on the computer (``earthengine authenticate``)
 and ``GEE_PROJECT`` in .env must name a Cloud project registered for Earth Engine.
 """
@@ -28,6 +33,7 @@ from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError,
 logger = logging.getLogger(__name__)
 
 PARALLEL_REQUESTS = 4      # tiles requested from GEE at the same time
+MIN_SPLIT_PIXELS = 256 * 256  # a too-heavy tile is not split below this
 NODATA = -9999.0           # value of pixels outside the AOI or without imagery
 
 
@@ -43,6 +49,7 @@ class GEEClient(IGEEClient):
         self._max_request_bytes = max_request_bytes
         self._initialized = False
         self._lock = threading.Lock()
+        self._splits: dict[str, int] = {}  # request -> times its tiles had to be split
 
     # ------------------------------------------------------------- access
     def validate_access(self) -> bool:
@@ -116,10 +123,14 @@ class GEEClient(IGEEClient):
                 queue = iter(pending)
                 running: dict[Future, Tile] = {}
 
+                key = _request_key(chunk)
+
                 def submit_next() -> None:
                     tile = next(queue, None)
                     if tile is not None:
-                        running[pool.submit(self._fetch_tile, image, chunk, tile)] = tile
+                        with self._lock:
+                            splits = self._splits.get(key, 0)
+                        running[pool.submit(self._fetch_pixels, image, chunk, tile, splits)] = tile
 
                 for _ in range(self._parallel):
                     submit_next()
@@ -127,11 +138,13 @@ class GEEClient(IGEEClient):
                     finished, _ = wait(running, return_when=FIRST_COMPLETED)
                     for future in finished:
                         tile = running.pop(future)
-                        data = future.result()  # GEEError propagates to the caller
-                        _write_tile(dst, data, tile, chunk)
+                        pixels, received, splits = future.result()  # GEEError propagates to the caller
+                        with self._lock:
+                            self._splits[key] = max(self._splits.get(key, 0), splits)
+                        _write_tile(dst, pixels, tile)
                         progress.add(tile.index)
                         if on_progress:  # raster bytes (they add up to the chunk's planned size), bytes received
-                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL, len(data))
+                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL, received)
                         if stop():
                             return False  # requests still in flight are abandoned
                         submit_next()
@@ -165,6 +178,33 @@ class GEEClient(IGEEClient):
             raise
         except Exception as exc:
             raise _error(exc, self._project) from exc
+
+    def _fetch_pixels(self, image: Any, chunk: ChunkDTO, tile: Tile, splits: int) -> tuple[Any, int, int]:
+        """Pixels of ``tile`` (bands x height x width), the bytes received for them, and how many
+        times the tile had to be split. ``splits`` > 0 starts with that many splits already."""
+        if splits == 0 or not _can_split(tile):
+            try:
+                data = self._fetch_tile(image, chunk, tile)
+            except GEERequestTooHeavyError:
+                if not _can_split(tile):
+                    raise
+                logger.info("Tile %s of chunk %s is too heavy for Earth Engine; fetching it in quarters",
+                            tile.index, chunk.id)
+                splits = 1
+            else:
+                return _decode_tile(data, tile, chunk), len(data), 0
+
+        import numpy as np
+
+        pixels = np.empty((len(chunk.bands), tile.height, tile.width), dtype="float32")
+        received, start = 0, splits - 1
+        for part in _quarters(tile):
+            part_pixels, part_received, part_splits = self._fetch_pixels(image, chunk, part, start)
+            pixels[:, part.row - tile.row:part.row - tile.row + part.height,
+                   part.col - tile.col:part.col - tile.col + part.width] = part_pixels
+            received += part_received
+            start = max(start, part_splits)  # the next quarters start as small as this one had to be
+        return pixels, received, start + 1
 
     def _fetch_tile(self, image: Any, chunk: ChunkDTO, tile: Tile) -> bytes:
         """GeoTIFF bytes of one tile, on the chunk's grid shifted to the tile's corner."""
@@ -216,16 +256,45 @@ def _open_chunk_file(path: Path, chunk: ChunkDTO, resume: bool):
     return dst
 
 
-def _write_tile(dst: Any, data: bytes, tile: Tile, chunk: ChunkDTO) -> None:
+def _decode_tile(data: bytes, tile: Tile, chunk: ChunkDTO) -> Any:
+    """The pixels of a GeoTIFF returned by GEE, checked against the tile's shape."""
     from rasterio.io import MemoryFile
-    from rasterio.windows import Window
 
     with MemoryFile(data) as memory, memory.open() as src:
         pixels = src.read(out_dtype="float32")
     expected = (len(chunk.bands), tile.height, tile.width)
     if pixels.shape != expected:
         raise GEEError(f"GEE returned a tile of shape {pixels.shape}, expected {expected}.")
+    return pixels
+
+
+def _write_tile(dst: Any, pixels: Any, tile: Tile) -> None:
+    from rasterio.windows import Window
+
     dst.write(pixels, window=Window(tile.col, tile.row, tile.width, tile.height))
+
+
+def _can_split(tile: Tile) -> bool:
+    return tile.width * tile.height > MIN_SPLIT_PIXELS
+
+
+def _quarters(tile: Tile) -> list[Tile]:
+    """``tile`` cut in half each way (only one way if it is a single row or column)."""
+    half_width, half_height = (tile.width + 1) // 2, (tile.height + 1) // 2
+    parts = []
+    for row in range(tile.row, tile.row + tile.height, half_height):
+        for col in range(tile.col, tile.col + tile.width, half_width):
+            parts.append(Tile(
+                index=tile.index, col=col, row=row,
+                width=min(half_width, tile.col + tile.width - col),
+                height=min(half_height, tile.row + tile.height - row),
+            ))
+    return parts
+
+
+def _request_key(chunk: ChunkDTO) -> str:
+    """Identifies the request a chunk belongs to (chunks of one download share it)."""
+    return json.dumps(chunk.request.to_dict() if chunk.request else {}, sort_keys=True, default=str)
 
 
 class _TileProgress:

@@ -47,6 +47,8 @@ class FakeGEEClient(GEEClient):
         self.fetched: list[int] = []
         self.sent: list[int] = []      # size of each response, in bytes
         self.wrong_shape = False
+        self.max_pixels: int | None = None  # bigger requests run out of memory, like a heavy composite
+        self.requests: list[tuple[int, int]] = []  # (pixels asked for, refused?)
 
     def _initialize(self):
         pass
@@ -55,6 +57,10 @@ class FakeGEEClient(GEEClient):
         return "image"
 
     def _fetch_tile(self, image, chunk, tile):
+        refused = self.max_pixels is not None and tile.width * tile.height > self.max_pixels
+        self.requests.append((tile.width * tile.height, refused))
+        if refused:
+            raise GEERequestTooHeavyError("Earth Engine ran out of memory computing this request.")
         self.fetched.append(tile.index)
         shape = (1, 3, 3) if self.wrong_shape else None
         data = _tile_bytes(chunk, tile, tile.index + 1, shape)
@@ -129,6 +135,51 @@ def test_damaged_partial_chunk_is_downloaded_again(tmp_path):
     assert client.fetched == [0, 1, 0, 1, 2, 3]  # started the chunk over
     with rasterio.open(path) as src:
         assert [src.read(1)[row, 0] for row in (0, 10, 20, 30)] == [1, 2, 3, 4]
+
+
+def test_too_heavy_tile_is_fetched_in_quarters_and_later_tiles_start_small(tmp_path, monkeypatch):
+    monkeypatch.setattr(gee_module, "MIN_SPLIT_PIXELS", 10)
+    client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"  # 4 tiles of 50 x 10
+    client.max_pixels = 150
+    received = []
+
+    assert client.fetch_chunk(chunk, str(path), on_progress=lambda raster, network: received.append((raster, network)))
+
+    assert client.requests[:5] == [(500, True)] + [(125, False)] * 4  # refused, then 4 quarters of 25 x 5
+    assert client.requests[5:] == [(125, False)] * 12  # the other 3 tiles start in quarters: nothing refused
+    with rasterio.open(path) as src:
+        assert [src.read(1)[row, col] for row in (0, 14, 25, 39) for col in (0, 49)] == [1, 1, 2, 2, 3, 3, 4, 4]
+    assert [raster for raster, _ in received] == [50 * 10 * 2 * 4] * 4  # progress per tile is unchanged
+    assert sum(network for _, network in received) == sum(client.sent)
+
+
+def test_tiles_are_split_again_until_they_fit(tmp_path, monkeypatch):
+    monkeypatch.setattr(gee_module, "MIN_SPLIT_PIXELS", 10)
+    client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
+    client.max_pixels = 40  # 500 -> 125 (25 x 5) -> 39 (13 x 3) at most
+
+    assert client.fetch_chunk(chunk, str(path))
+    with rasterio.open(path) as src:
+        assert [src.read(1)[row, 0] for row in (0, 10, 20, 39)] == [1, 2, 3, 4]
+    refused = [r for _, r in client.requests]
+    assert refused[:2] == [True, True] and not any(refused[2:])  # 500 px, then 125 px; nothing fails after that
+    assert max(size for size, _ in client.requests[2:]) <= 40
+
+
+def test_too_heavy_even_when_small_is_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(gee_module, "MIN_SPLIT_PIXELS", 200)
+    client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
+    client.max_pixels = 50  # quarters of 125 px are refused and too small to split again
+
+    with pytest.raises(GEERequestTooHeavyError):
+        client.fetch_chunk(chunk, str(path))
+
+
+def test_quarters_cover_the_tile_exactly():
+    tile = gee_module.Tile(index=3, col=10, row=20, width=5, height=1)
+    parts = gee_module._quarters(tile)
+    assert [(p.col, p.row, p.width, p.height) for p in parts] == [(10, 20, 3, 1), (13, 20, 2, 1)]
+    assert all(p.index == 3 for p in parts)
 
 
 def test_tile_of_the_wrong_shape_is_an_error(tmp_path):
