@@ -8,7 +8,8 @@ from datetime import date
 import pytest
 
 from backend.business.request import RequestService
-from backend.business.request.query_interpretation import check_interpretation
+from backend.business.request.query_entities import QueryEntityExtractor
+from backend.business.request.query_interpretation import check_interpretation, ground_with_entities
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.data.i_data_facade import IDataFacade
 from backend.dto import FormDTO
@@ -30,13 +31,24 @@ class FakeDataFacade(IDataFacade):
 
 
 # ------------------------------------------------------------------ submit_query
-def test_query_is_cleaned_sent_and_not_kept():
+RULES_ONLY = QueryEntityExtractor(use_spacy=False, today=TODAY)  # deterministic, no spaCy model needed
+
+
+def service_with(facade=None) -> RequestService:
+    return RequestService(data_facade=facade, entity_extractor=RULES_ONLY)
+
+
+def test_query_is_cleaned_sent_with_entity_hints_and_not_kept():
     facade = FakeDataFacade(FormDTO(dataset="sentinel2_sr", aoi=BOX, start_date=date(2024, 1, 1), end_date=date(2024, 2, 1)))
-    service = RequestService(data_facade=facade)
+    service = service_with(facade)
     form = service.submit_query("  NDVI   for\n Faisalabad  ")
-    assert facade.prompts == ["NDVI for Faisalabad"]
+    prompt = facade.prompts[0]
+    assert prompt.startswith("NDVI for Faisalabad")
+    assert 'PROCESS: "NDVI"' in prompt and 'PLACE: "Faisalabad"' in prompt
     assert form.source == "nl" and form.query_text == "NDVI for Faisalabad"
+    assert form.analysis_type == "Vegetation" and form.processes == ["NDVI"]  # from the entity
     assert form.bands  # filled with the dataset defaults
+    assert [e.label for e in form.entities] == ["PROCESS", "PLACE"]
     assert service.get_kept_requests() == []  # kept only when the user submits the form
 
 
@@ -44,19 +56,72 @@ def test_query_is_cleaned_sent_and_not_kept():
 def test_empty_or_too_long_query_is_rejected_before_gemini(text):
     facade = FakeDataFacade(FormDTO())
     with pytest.raises(ValidationError):
-        RequestService(data_facade=facade).submit_query(text)
+        service_with(facade).submit_query(text)
     assert facade.prompts == []
 
 
-def test_without_gemini_a_clear_error_is_raised():
+def test_gemini_errors_reach_the_caller_when_nothing_is_recognised():
+    service = service_with(FakeDataFacade(error=LLMServiceError("Gemini is busy right now.")))
+    with pytest.raises(LLMServiceError, match="busy"):
+        service.submit_query("show me something nice")
+
+
+def test_without_gemini_and_nothing_recognised_a_clear_error_is_raised():
     with pytest.raises(LLMServiceError):
-        RequestService().submit_query("NDVI for Lahore")
+        service_with(None).submit_query("show me something nice")
 
 
-def test_gemini_errors_reach_the_caller():
-    service = RequestService(data_facade=FakeDataFacade(error=LLMServiceError("quota reached")))
-    with pytest.raises(LLMServiceError, match="quota"):
-        service.submit_query("NDVI for Lahore")
+def test_when_gemini_fails_the_form_is_filled_from_entities():
+    service = service_with(FakeDataFacade(error=LLMServiceError("Gemini is busy right now.")))
+    form = service.submit_query("Landsat 8 NDVI for Faisalabad in 2023, under 15% clouds, at 30 m")
+    assert form.dataset == "landsat8_l2" and form.processes == ["NDVI"] and form.analysis_type == "Vegetation"
+    assert (form.start_date, form.end_date) == (date(2023, 1, 1), date(2023, 12, 31))
+    assert form.max_cloud_cover == 15 and form.scale == 30
+    assert form.aoi == "" and form.aoi_name == "Faisalabad"
+    assert form.notes[0].startswith("Gemini is busy right now.")
+    assert any("draw the area" in n for n in form.notes)
+
+
+# ------------------------------------------------------------ ground_with_entities
+def entities(text: str):
+    return RULES_ONLY.extract(text)
+
+
+def test_named_dataset_overrides_gemini():
+    gemini = FormDTO(dataset="sentinel2_sr", bands=["B4", "B8"])
+    form = ground_with_entities(gemini, entities("Landsat 8 data for Multan"))
+    assert form.dataset == "landsat8_l2" and form.bands == []  # Sentinel-2 bands no longer apply
+    assert any("Landsat 8" in n and "Gemini suggested" in n for n in form.notes)
+
+
+def test_two_named_datasets_leave_gemini_to_choose():
+    form = ground_with_entities(FormDTO(dataset="landsat9_l2"), entities("Sentinel-2 or Landsat 8 for Multan"))
+    assert form.dataset == "landsat9_l2"
+
+
+def test_named_processes_bands_cloud_resolution_and_composite_win():
+    gemini = FormDTO(dataset="landsat8_l2", analysis_type="Water", processes=["NDWI"], max_cloud_cover=50, scale=60)
+    form = ground_with_entities(gemini, entities("EVI with bands SR_B4 and SR_B5, cloud-free, 30 m resolution, mean composite"))
+    assert form.analysis_type == "Vegetation" and form.processes == ["EVI"]
+    assert form.bands == ["SR_B4", "SR_B5"]
+    assert (form.max_cloud_cover, form.scale, form.composite) == (10, 30, "mean")
+
+
+def test_gemini_extra_processes_in_the_same_category_are_kept():
+    gemini = FormDTO(analysis_type="Vegetation", processes=["NDVI", "SAVI"])
+    assert ground_with_entities(gemini, entities("NDVI please")).processes == ["NDVI", "SAVI"]
+
+
+def test_dates_from_entities_only_fill_gaps():
+    gemini = FormDTO(start_date=date(2024, 6, 1), end_date=date(2024, 8, 31))
+    assert ground_with_entities(gemini, entities("NDVI in 2020")).start_date == date(2024, 6, 1)
+    assert ground_with_entities(FormDTO(), entities("NDVI in 2020")).end_date == date(2020, 12, 31)
+
+
+def test_place_without_area_gets_a_note():
+    form = ground_with_entities(FormDTO(), entities("NDVI for Sahiwal"))
+    assert form.aoi_name == "Sahiwal" and any("Sahiwal" in n for n in form.notes)
+    assert not any("Sahiwal" in n for n in ground_with_entities(FormDTO(aoi=BOX), entities("NDVI for Sahiwal")).notes)
 
 
 # ----------------------------------------------------------- check_interpretation
