@@ -162,6 +162,8 @@ def test_download_is_split_fetched_merged_and_named(env):
     assert job.progress == 1.0 and job.completed_chunks == 2
     assert all(c.status == CHUNK_MERGED for c in job.chunks)
     assert job.dataset.source == "COPERNICUS/S2_SR_HARMONIZED"
+    assert job.received_bytes == job.total_bytes  # the fake sends exactly the planned bytes
+    assert job.disk_bytes == sum(p.stat().st_size for p in Path(job.folder).iterdir())
 
 
 def test_merged_file_grows_as_each_chunk_arrives(env, monkeypatch):

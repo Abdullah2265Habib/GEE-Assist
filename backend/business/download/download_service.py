@@ -131,7 +131,8 @@ class DownloadService(IDownloadService):
         with self._lock:
             current = self._job(job)
             self._update_speed(current)
-            return self._snapshot(current)
+            snapshot = self._snapshot(current)
+        return _with_disk_size(snapshot)
 
     def retry_failed_chunks(self, job: DownloadJobDTO) -> DownloadJobDTO:
         with self._lock:
@@ -183,7 +184,8 @@ class DownloadService(IDownloadService):
         with self._lock:
             for job in self._jobs.values():
                 self._update_speed(job)
-            return [self._snapshot(job) for job in self._jobs.values()]
+            snapshots = [self._snapshot(job) for job in self._jobs.values()]
+        return [_with_disk_size(job) for job in snapshots]  # outside the lock: it reads the disk
 
     def chunk_size_mb(self) -> int:
         return self._settings.load().chunk_size_mb
@@ -308,6 +310,7 @@ class DownloadService(IDownloadService):
             before = chunk.downloaded_bytes
             chunk.downloaded_bytes = min(chunk.size_bytes, before + count)
             job.downloaded_bytes = sum(c.downloaded_bytes for c in job.chunks)
+            job.received_bytes += received
             self._network.add(received)
             self._progress.add(chunk.downloaded_bytes - before)
             self._update_speed(job)
@@ -398,6 +401,29 @@ class DownloadService(IDownloadService):
     @staticmethod
     def _snapshot(job: DownloadJobDTO) -> DownloadJobDTO:
         return copy.deepcopy(job)
+
+
+def _with_disk_size(job: DownloadJobDTO) -> DownloadJobDTO:
+    job.disk_bytes = 0 if job.status == JOB_CANCELLED else _folder_size(Path(job.folder))
+    return job
+
+
+def _folder_size(folder: Path) -> int:
+    """Bytes of all files under ``folder`` (0 if it is gone)."""
+    total = 0
+    try:
+        entries = list(os.scandir(folder))
+    except OSError:
+        return 0
+    for entry in entries:
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                total += _folder_size(Path(entry.path))
+            elif entry.is_file(follow_symlinks=False):
+                total += entry.stat(follow_symlinks=False).st_size
+        except OSError:
+            pass  # removed while we looked
+    return total
 
 
 def _now() -> str:

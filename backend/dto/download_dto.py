@@ -111,6 +111,8 @@ class DownloadJobDTO:
     total_bytes: int = 0                        # expected size of the whole dataset
     downloaded_bytes: int = 0
     merged_bytes: int = 0                       # size of the merged GeoTIFF so far
+    received_bytes: int = 0                     # bytes actually received from GEE (all attempts)
+    disk_bytes: int = 0                         # size of the job's files on disk right now
     merged_path: str = ""                       # the merged GeoTIFF so far (top chunks joined)
     speed_bps: float = 0.0                      # current download speed (last 20 s), bytes / second
     average_speed_bps: float = 0.0              # average speed since the download (re)started
