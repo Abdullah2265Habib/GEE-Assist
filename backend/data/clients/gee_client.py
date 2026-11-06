@@ -131,7 +131,7 @@ class GEEClient(IGEEClient):
             pending = tiles
             dst = _open_chunk_file(target, chunk, resume=False)
         reporter = _ChunkReporter(on_progress)
-        with dst:
+        with _ChunkFile(target, dst) as chunk_file:
             pool = ThreadPoolExecutor(max_workers=self._parallel, thread_name_prefix="gee-tile")
             try:
                 queue = iter(pending)
@@ -160,7 +160,7 @@ class GEEClient(IGEEClient):
                             return False
                         with self._lock:
                             self._splits[key] = max(self._splits.get(key, 0), splits)
-                        _write_tile(dst, pixels, tile)
+                        chunk_file.write(pixels, tile)
                         progress.add(tile.index)
                         reporter.written(tile.index, tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL)
                         if stop():
@@ -395,10 +395,27 @@ def _decode_tile(data: bytes, tile: Tile, chunk: ChunkDTO) -> Any:
     return pixels
 
 
-def _write_tile(dst: Any, pixels: Any, tile: Tile) -> None:
-    from rasterio.windows import Window
+class _ChunkFile:
+    """The chunk GeoTIFF being written. A tile is on disk once ``write`` returns."""
 
-    dst.write(pixels, window=Window(tile.col, tile.row, tile.width, tile.height))
+    def __init__(self, path: Path, dst: Any):
+        self._path, self._dst = path, dst
+
+    def write(self, pixels: Any, tile: Tile) -> None:
+        import rasterio
+        from rasterio.windows import Window
+
+        self._dst.write(pixels, window=Window(tile.col, tile.row, tile.width, tile.height))
+        # GDAL keeps written blocks in memory until the file is closed: close it so the tile
+        # is on disk (disk usage shows it, a crash keeps it), then reopen for the next tile.
+        self._dst.close()
+        self._dst = rasterio.open(self._path, "r+")
+
+    def __enter__(self) -> "_ChunkFile":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self._dst.close()
 
 
 def _can_split(tile: Tile) -> bool:

@@ -49,6 +49,8 @@ class FakeGEEClient(GEEClient):
         self.wrong_shape = False
         self.max_pixels: int | None = None  # bigger requests run out of memory, like a heavy composite
         self.requests: list[tuple[int, int]] = []  # (pixels asked for, refused?)
+        self.watch = None                  # a file whose size is noted at each request
+        self.sizes: list[int] = []
 
     def _initialize(self):
         pass
@@ -57,6 +59,8 @@ class FakeGEEClient(GEEClient):
         return "image"
 
     def _fetch_tile(self, image, chunk, tile, on_bytes, stop):
+        if self.watch is not None:
+            self.sizes.append(self.watch.stat().st_size)
         refused = self.max_pixels is not None and tile.width * tile.height > self.max_pixels
         self.requests.append((tile.width * tile.height, refused))
         if refused:
@@ -114,6 +118,15 @@ def test_chunk_is_written_tile_by_tile_on_the_chunk_grid(tmp_path):
     assert sum(network for _, network in received) == sum(client.sent)  # what GEE sent
     assert received[0][0] > 0 and received[0][1] > 0  # progress shows while the first tile arrives
     assert not path.with_name(path.name + ".tiles.json").exists()
+
+
+def test_each_tile_is_on_disk_before_the_next_is_requested(tmp_path):
+    client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
+    client.watch = path
+    assert client.fetch_chunk(chunk, str(path))
+    # The 50 x 40 test chunk fits in one 256 x 256 block: the block is on disk as soon as the first
+    # tile is written (it used to stay in memory until the end), so the file is full from then on.
+    assert client.sizes[0] < 100 and client.sizes[1] > 50 * 40 * 2 * 4
 
 
 def test_stopped_chunk_continues_with_the_next_tile(tmp_path):
