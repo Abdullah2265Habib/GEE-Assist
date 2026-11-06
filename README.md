@@ -58,8 +58,9 @@ How it works:
   **Change…** on the Downloads page; applies to new downloads). A 2 GB dataset is 4 chunks.
 - Each chunk is fetched from GEE as several requests under GEE's 48 MB limit.
 - Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
-- The result is `<output folder>/<satellite>_<lon>_<lat>/<satellite>_<lon>_<lat>.tif`, e.g.
-  `Sentinel-2_73.8231_33.2334/Sentinel-2_73.8231_33.2334.tif` (centre of the AOI).
+- The result is `<output folder>/<name>/<name>.tif`, where `<name>` is
+  `<satellite>_<lon>_<lat>_<started>`: the centre of the AOI and when the download was started, e.g.
+  `Sentinel-2_73.8231_33.2334_2026-11-06_21-30-15/Sentinel-2_73.8231_33.2334_2026-11-06_21-30-15.tif`.
 - Pause keeps finished parts; Start continues where it stopped, even after closing the app.
   Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
 
