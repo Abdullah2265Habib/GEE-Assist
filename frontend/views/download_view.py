@@ -286,7 +286,7 @@ class DownloadView(QWidget):
     # ------------------------------------------------------------- updating
     def _update_stats(self, jobs: list[DownloadJobDTO], running: DownloadJobDTO | None) -> None:
         speed = running.speed_bps if running else 0.0
-        self.chart.add_sample(speed)
+        self.chart.add_sample(speed, running.average_speed_bps if running else 0.0)
         self._peak = max(self._peak, speed)
         active = [job for job in jobs if job.status != JOB_COMPLETED]
         on_disk = sum(job.dataset.size_bytes for job in jobs if job.status == JOB_COMPLETED and job.dataset)

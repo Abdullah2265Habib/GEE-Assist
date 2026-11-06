@@ -20,6 +20,7 @@ from frontend.views import download_view as download_module  # noqa: E402
 from frontend.views.download_view import DownloadView  # noqa: E402
 from frontend.views.kept_requests_view import KeptRequestsView  # noqa: E402
 from frontend.widgets.download_rows import CompletedRow, JobRow, job_status, job_title  # noqa: E402
+from frontend.widgets.speed_chart import SpeedChart  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -97,7 +98,8 @@ def test_empty_sections_say_so(view):
 
 
 def test_statistics_follow_the_running_download(view, facade):
-    facade.list_downloads.return_value = [_job("1", "running", downloaded_bytes=740_000_000, speed_bps=1_500_000, merge_speed_bps=3_200_000)]
+    facade.list_downloads.return_value = [_job("1", "running", downloaded_bytes=740_000_000, speed_bps=1_500_000,
+                                               average_speed_bps=1_200_000, merge_speed_bps=3_200_000)]
     view.refresh()
 
     assert view.stats["CURRENT"].text() == "1.5 MB/s"
@@ -107,6 +109,18 @@ def test_statistics_follow_the_running_download(view, facade):
     assert view.stats["MERGING SPEED"].text() == "3.2 MB/s"
     assert view.chunk_setting.text() == "Chunk size: 500 MB"
     assert view.chart.samples()[-1] == 1_500_000
+    assert view.chart.averages()[-1] == 1_200_000
+
+
+def test_speed_chart_keeps_the_last_minute_of_real_time(app):
+    now = [0.0]
+    chart = SpeedChart(clock=lambda: now[0])
+    for second in range(0, 90, 10):  # irregular refreshes are placed by time, not by count
+        now[0] = second
+        chart.add_sample(second * 1000, 500)
+    assert chart.samples() == [20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000]  # 20 s is just off the edge
+    assert chart.averages()[-1] == 500
+    chart.grab()  # paints without errors
 
 
 # ------------------------------------------------------------------ buttons
