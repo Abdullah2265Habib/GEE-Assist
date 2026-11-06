@@ -11,8 +11,8 @@ from frontend.views.parameter_form_view import ParameterFormView
 
 
 class MainWindow(QMainWindow):
-    """The parameter form (with its floating natural-language assistant)
-    and a side panel listing the kept requests."""
+    """The parameter form and a side panel listing the kept requests, with the
+    natural-language assistant ("Chat with Gemini") at the bottom of the panel."""
 
     def __init__(self, facade: IBusinessFacade):
         super().__init__()
@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
         self.form_view = ParameterFormView(facade)
         self.setCentralWidget(self.form_view)
 
-        self.kept_view = KeptRequestsView()
+        self.kept_view = KeptRequestsView(assistant=self.form_view.assistant)
         dock = QDockWidget("Kept Requests")
         dock.setWidget(self.kept_view)
         dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
 
         self.statusBar().setSizeGripEnabled(False)
         self.form_view.request_kept.connect(self._on_request_kept)
-        self.statusBar().showMessage("Ready  ·  Press Ctrl+K or the ✦ button to describe a request in plain language")
+        self.statusBar().showMessage("Ready  ·  Press Ctrl+K or Chat with Gemini to describe a request in plain language")
 
     def _on_request_kept(self, form: FormDTO) -> None:
         self.kept_view.set_requests(self._facade.get_kept_requests())

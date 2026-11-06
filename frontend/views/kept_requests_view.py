@@ -19,7 +19,7 @@ def _summary(index: int, form: FormDTO) -> str:
 class KeptRequestsView(QWidget):
     """Shows every request kept this session; select one to see its parameters."""
 
-    def __init__(self, parent=None):
+    def __init__(self, assistant: QWidget | None = None, parent=None):
         super().__init__(parent)
         self._requests: list[FormDTO] = []
 
@@ -32,6 +32,11 @@ class KeptRequestsView(QWidget):
         layout.addWidget(self._list, 1)
         layout.addWidget(QLabel("Parameters"))
         layout.addWidget(self._details, 2)
+        if assistant is not None:
+            # Sits under the parameters; opening it shrinks the parameters view.
+            layout.addSpacing(4)
+            layout.addWidget(assistant)
+        self._details.setMinimumHeight(90)
         self.setMinimumWidth(320)
 
         self._list.currentRowChanged.connect(self._show_details)
