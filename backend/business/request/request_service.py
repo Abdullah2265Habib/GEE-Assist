@@ -8,7 +8,8 @@ from pathlib import Path
 
 from backend.business.request.geojson_utils import read_aoi_geometry, utm_epsg_for, validate_geometry
 from backend.business.request.i_request_service import IRequestService
-from backend.business.request.query_interpretation import check_interpretation
+from backend.business.request.query_entities import IEntityExtractor, QueryEntityExtractor, format_entity_hints
+from backend.business.request.query_interpretation import check_interpretation, ground_with_entities, has_form_values
 from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.data.i_data_facade import IDataFacade
@@ -24,32 +25,49 @@ class RequestService(IRequestService):
     The data facade reaches Gemini (Interpret Query) and, later, MongoDB (saveProject).
     """
 
-    def __init__(self, data_facade: IDataFacade | None = None):
+    def __init__(self, data_facade: IDataFacade | None = None, entity_extractor: IEntityExtractor | None = None):
         self._data_facade = data_facade
+        self._entity_extractor = entity_extractor or QueryEntityExtractor()
         self._kept_requests: list[FormDTO] = []
 
     # ------------------------------------------------------------------
     # UC-02 Enter Natural Language Query + Interpret Query (LLM)
     # ------------------------------------------------------------------
     def submit_query(self, text: str) -> FormDTO:
-        """Interpret the query with Gemini and return form values to review.
+        """Interpret the query and return form values to review.
 
+        1. a local named-entity classifier finds places, dates, datasets, processes, ...
+        2. Gemini interprets the query, with those entities as hints
+        3. what the user explicitly wrote overrides Gemini's guesses
+        4. everything is checked against the dataset catalogue
+
+        If Gemini is unavailable, the form is filled from the entities alone.
         Nothing is kept here: the user checks the filled form and submits it.
 
         Raises:
             ValidationError: the query is empty (5a) or too long.
-            LLMServiceError: Gemini is not set up, failed, or answered unusably.
+            LLMServiceError: Gemini failed and nothing could be recognised locally either.
         """
         query = " ".join((text or "").split())
         if not query:
             raise ValidationError("Please describe the data you need, e.g. the place, dates and dataset.")
         if len(query) > MAX_QUERY_LENGTH:
             raise ValidationError(f"The request is too long ({len(query)} characters, limit {MAX_QUERY_LENGTH}).")
-        if self._data_facade is None:
-            raise LLMServiceError("Natural-language input is not available: Gemini is not connected.")
 
-        interpreted = self._data_facade.process_query(query)
-        return check_interpretation(replace(interpreted, source="nl", query_text=query))
+        entities = self._entity_extractor.extract(query)
+        try:
+            if self._data_facade is None:
+                raise LLMServiceError("Gemini isn't connected.")
+            interpreted = self._data_facade.process_query(query + format_entity_hints(entities))
+        except LLMServiceError as exc:
+            fallback = ground_with_entities(FormDTO(source="nl", query_text=query), entities)
+            if not has_form_values(fallback):
+                raise
+            note = f"{exc} The form was filled from what was recognised in your text."
+            return check_interpretation(replace(fallback, notes=[note, *fallback.notes]))
+
+        grounded = ground_with_entities(replace(interpreted, source="nl", query_text=query), entities)
+        return check_interpretation(grounded)
 
     # ------------------------------------------------------------------
     # UC-03 Fill Parameter Form               (branch: query-input-form)
