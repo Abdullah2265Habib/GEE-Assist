@@ -133,6 +133,11 @@ class CheckGrid(QWidget):
     def checked(self) -> list[str]:
         return [box.text() for box in self._boxes if box.isEnabled() and box.isChecked()]
 
+    def set_checked(self, texts) -> None:
+        wanted = set(texts)
+        for box in self._boxes:
+            box.setChecked(box.isEnabled() and box.text() in wanted)
+
     def boxes(self) -> list[QCheckBox]:
         return list(self._boxes)
 

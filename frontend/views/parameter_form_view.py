@@ -39,6 +39,7 @@ from backend.config import (
     get_dataset,
 )
 from backend.dto import FormDTO, ValidationDTO
+from backend.config.limits import MAX_QUERY_LENGTH
 from backend.exceptions import GeeAssistError
 from frontend import form_theme as theme
 from frontend.aoi_geometry import (
@@ -52,6 +53,7 @@ from frontend.aoi_geometry import (
     vertex_count,
 )
 from frontend.widgets.aoi_map_widget import AoiMapWidget
+from frontend.widgets.query_assistant import QueryAssistant
 from frontend.widgets.form_parts import (
     CheckComboBox,
     CheckGrid,
@@ -63,6 +65,7 @@ from frontend.widgets.form_parts import (
     section_card,
     set_invalid,
 )
+from frontend.workers.task_worker import run_task
 
 AOI_FILE, AOI_DRAW = 0, 1
 NO_SHAPE_TEXT = "No shape drawn yet."
@@ -188,6 +191,10 @@ class ParameterFormView(QWidget):
         self.scale_spin.valueChanged.connect(self._update_estimate)
         self.reset_button.clicked.connect(self.reset)
         self.submit_button.clicked.connect(self._on_submit)
+
+        # Floating natural-language assistant (UC-02): fills this form via Gemini.
+        self.assistant = QueryAssistant(self, scroll, MAX_QUERY_LENGTH)
+        self.assistant.submitted.connect(self._on_query_submitted)
 
         self.reset()
 
@@ -593,6 +600,91 @@ class ParameterFormView(QWidget):
                 sync_spins=False,
             )
             self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+
+    # ------------------------------------------------------- natural language
+    def _on_query_submitted(self, text: str) -> None:
+        self.assistant.set_busy(True)
+        run_task(
+            self, self._facade.submit_query, text,
+            on_success=self._on_query_interpreted, on_error=self._on_query_failed,
+        )
+
+    def _on_query_interpreted(self, form: FormDTO) -> None:
+        self.assistant.set_busy(False)
+        filled = self.apply_form(form)
+        notes = " ".join(form.notes)
+
+        if not filled:
+            self.assistant.show_info(
+                form.clarification
+                or "No form values could be taken from that request. Try naming a place, dates or a dataset."
+            )
+            return
+
+        summary = f"Filled from your request: {', '.join(filled)}."
+        if form.clarification:  # partly understood: keep the card open with Gemini's question
+            self.assistant.show_info(f"{summary} {form.clarification}")
+        else:
+            self.assistant.close()
+        self.status_banner.show_info(" ".join(filter(None, (summary, notes, "Check the values, then press Submit Parameters."))))
+
+    def _on_query_failed(self, exc: Exception) -> None:
+        self.assistant.set_busy(False)
+        self.assistant.show_error(str(exc) if isinstance(exc, GeeAssistError) else "Something went wrong. Please try again.")
+
+    def apply_form(self, form: FormDTO) -> list[str]:
+        """Put the values of ``form`` into the widgets. Returns the names of the parts filled.
+
+        Empty values leave the current field untouched; the output settings
+        (projection, folder) are never changed by a query.
+        """
+        filled: list[str] = []
+        self._show_validation(ValidationDTO())  # clear old errors
+
+        index = self.dataset_combo.findData(form.dataset) if form.dataset else -1
+        if index >= 0:
+            self.dataset_combo.setCurrentIndex(index)
+            self._on_dataset_changed()  # also when it was already selected: resets dependent fields
+            filled.append("dataset")
+            if form.bands:
+                self.bands_combo.set_checked(form.bands)
+                filled.append("bands")
+            if form.scale:
+                self.scale_spin.setValue(form.scale)
+            if form.max_cloud_cover is not None and self.cloud_spin.isEnabled():
+                self.cloud_spin.setValue(form.max_cloud_cover)
+                filled.append("cloud cover")
+            if form.composite:
+                self.composite_combo.setCurrentText(form.composite)
+
+        if form.start_date or form.end_date:
+            if form.end_date:
+                self.end_date_edit.setDate(_qdate(form.end_date))
+            if form.start_date:
+                self.start_date_edit.setDate(_qdate(form.start_date))
+            filled.append("dates")
+
+        if form.aoi:
+            geometry = json.loads(form.aoi)
+            name = form.aoi_name or "Area from your request"
+            self.aoi_draw_toggle.setChecked(True)
+            self._on_aoi_mode_changed(AOI_DRAW)
+            self._set_drawn_shape(
+                geometry, name,
+                f"<b>{name}</b> · approximate area from your request. Adjust it on the map if needed.",
+            )
+            min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
+            self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+            filled.append(f"area ({name})")
+
+        analysis_index = self.analysis_combo.findData(form.analysis_type) if form.analysis_type else -1
+        if analysis_index > 0 and self.analysis_combo.model().item(analysis_index).isEnabled():
+            self.analysis_combo.setCurrentIndex(analysis_index)
+            self._on_analysis_changed()
+            self.processes_grid.set_checked(form.processes)
+            filled.append("analysis")
+
+        return filled
 
     # ---------------------------------------------------------------- output
     def _on_browse_output(self) -> None:
