@@ -174,10 +174,11 @@ class JobRow(QFrame):
         self.pause_button = QPushButton("Pause", objectName="SecondaryButton")
         self.cancel_button = QPushButton("Cancel", objectName="SecondaryButton")
         buttons = QHBoxLayout()
-        buttons.addWidget(self.error, 1)
+        buttons.addWidget(self.error, 4)
+        buttons.addStretch(1)  # keeps the buttons compact and on the right
         for button in (self.start_button, self.pause_button, self.cancel_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setMinimumWidth(84)
+            button.setFixedWidth(88)
             buttons.addWidget(button)
 
         progress = QVBoxLayout()
