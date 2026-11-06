@@ -50,7 +50,7 @@ from backend.dto.download_dto import (
     JOB_QUEUED,
     JOB_RUNNING,
 )
-from backend.exceptions import GeeAssistError, ValidationError
+from backend.exceptions import GeeAssistError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +257,13 @@ class DownloadService(IDownloadService):
                     on_progress=lambda count: self._on_bytes(job, chunk, count),
                     should_stop=self._stop.is_set,
                 )
+            except (GEESetupError, ValidationError) as exc:
+                # Setup or request problem: retrying cannot help. Retry after fixing it.
+                with self._lock:
+                    chunk.status = CHUNK_FAILED
+                    job.status = JOB_FAILED
+                    job.error = str(exc)
+                return False
             except Exception as exc:
                 if not isinstance(exc, GeeAssistError):
                     logger.warning("Chunk %s of %s failed", chunk.id, job.name, exc_info=True)
