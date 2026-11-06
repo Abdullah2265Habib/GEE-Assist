@@ -5,8 +5,9 @@ from typing import Callable, Optional
 
 from backend.dto import ChunkDTO
 
-# Called after each GEE request with (raster bytes written, as float32, bytes received from GEE).
-# The first drives the progress bar; the second is what the network actually carried.
+# Called while a chunk downloads with (progress, bytes received from the network).
+# Progress is in raster bytes (float32) and adds up to the chunk's planned size; it can be
+# negative when a partly received tile is dropped (the download was paused or failed).
 ProgressCallback = Callable[[int, int], None]
 StopCheck = Callable[[], bool]             # True when the download is paused or cancelled
 

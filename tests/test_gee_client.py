@@ -56,7 +56,7 @@ class FakeGEEClient(GEEClient):
     def _build_image(self, form, bands):
         return "image"
 
-    def _fetch_tile(self, image, chunk, tile):
+    def _fetch_tile(self, image, chunk, tile, on_bytes, stop):
         refused = self.max_pixels is not None and tile.width * tile.height > self.max_pixels
         self.requests.append((tile.width * tile.height, refused))
         if refused:
@@ -65,6 +65,9 @@ class FakeGEEClient(GEEClient):
         shape = (1, 3, 3) if self.wrong_shape else None
         data = _tile_bytes(chunk, tile, tile.index + 1, shape)
         self.sent.append(len(data))
+        half = len(data) // 2  # arrives in two parts, like a streamed response
+        on_bytes(half, half)
+        on_bytes(len(data) - half, len(data) - half)
         return data
 
 
@@ -107,16 +110,16 @@ def test_chunk_is_written_tile_by_tile_on_the_chunk_grid(tmp_path):
         assert src.descriptions == ("B4", "B8") and src.nodata == NODATA
     assert pixels.shape == (2, 40, 50)
     assert [pixels[0, row, 0] for row in (0, 10, 20, 30)] == [1, 2, 3, 4]  # 4 tiles of 10 rows
-    assert [raster for raster, _ in received] == [50 * 10 * 2 * 4] * 4  # they add up to the chunk size
-    assert [network for _, network in received] == client.sent  # what GEE sent
+    assert sum(raster for raster, _ in received) == 50 * 40 * 2 * 4  # progress adds up to the chunk size
+    assert sum(network for _, network in received) == sum(client.sent)  # what GEE sent
+    assert received[0][0] > 0 and received[0][1] > 0  # progress shows while the first tile arrives
     assert not path.with_name(path.name + ".tiles.json").exists()
 
 
 def test_stopped_chunk_continues_with_the_next_tile(tmp_path):
     client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
-    done = []
 
-    assert client.fetch_chunk(chunk, str(path), on_progress=lambda raster, network: done.append(raster), should_stop=lambda: len(done) == 2) is False
+    assert client.fetch_chunk(chunk, str(path), should_stop=lambda: len(client.fetched) == 2) is False
     assert json.loads(path.with_name(path.name + ".tiles.json").read_text()) == [0, 1]
 
     assert client.fetch_chunk(chunk, str(path)) is True
@@ -127,8 +130,7 @@ def test_stopped_chunk_continues_with_the_next_tile(tmp_path):
 
 def test_damaged_partial_chunk_is_downloaded_again(tmp_path):
     client, chunk, path = FakeGEEClient(), _chunk(), tmp_path / "chunk_001.tif"
-    done = []
-    client.fetch_chunk(chunk, str(path), on_progress=lambda raster, network: done.append(raster), should_stop=lambda: len(done) == 2)
+    client.fetch_chunk(chunk, str(path), should_stop=lambda: len(client.fetched) == 2)
     path.write_bytes(b"truncated when the app was killed")
 
     assert client.fetch_chunk(chunk, str(path)) is True
@@ -149,7 +151,7 @@ def test_too_heavy_tile_is_fetched_in_quarters_and_later_tiles_start_small(tmp_p
     assert client.requests[5:] == [(125, False)] * 12  # the other 3 tiles start in quarters: nothing refused
     with rasterio.open(path) as src:
         assert [src.read(1)[row, col] for row in (0, 14, 25, 39) for col in (0, 49)] == [1, 1, 2, 2, 3, 3, 4, 4]
-    assert [raster for raster, _ in received] == [50 * 10 * 2 * 4] * 4  # progress per tile is unchanged
+    assert sum(raster for raster, _ in received) == 50 * 40 * 2 * 4  # progress is unchanged
     assert sum(network for _, network in received) == sum(client.sent)
 
 
@@ -202,9 +204,11 @@ def test_tile_request_shifts_the_grid_to_the_tile_corner(monkeypatch):
     chunk = _chunk()
     tile = plan_tiles(50, 40, 2, max_bytes=50 * 10 * 2 * 5)[2]  # rows 20-29
 
-    GEEClient(project="p")._fetch_tile("image", chunk, tile)
+    sent = []
+    monkeypatch.setattr(GEEClient, "_compute_pixels", lambda self, request, on_bytes, stop: sent.append(request))
+    GEEClient(project="p")._fetch_tile("image", chunk, tile, lambda *a: None, lambda: False)
 
-    grid = ee.data.computePixels.call_args[0][0]["grid"]
+    grid = sent[0]["grid"]
     assert grid["dimensions"] == {"width": 50, "height": 10}
     assert grid["affineTransform"]["translateX"] == 70.0
     assert grid["affineTransform"]["translateY"] == pytest.approx(35.0 - 0.01 * 20)
@@ -307,3 +311,71 @@ def test_temporary_problems_are_retried():
 @pytest.mark.parametrize("raw", ["User memory limit exceeded.", "Computation timed out.", "Earth Engine capacity exceeded."])
 def test_too_heavy_requests_are_recognised(raw):
     assert isinstance(gee_module._error(Exception(raw), "x"), GEERequestTooHeavyError)
+
+
+# ------------------------------------------------------------------ streaming responses
+class FakeResponse:
+    def __init__(self, blocks, status=200, error=None):
+        self.status_code, self._blocks, self._error = status, blocks, error
+        self.raw = MagicMock()
+        self.raw.tell.side_effect = [sum(len(b) for b in blocks[:i + 1]) // 2 for i in range(len(blocks))]  # gzip
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def iter_content(self, size):
+        yield from self._blocks
+
+    def json(self):
+        return {"error": {"message": self._error}}
+
+
+def _streaming_client(monkeypatch, response):
+    ee = MagicMock()
+    ee.EEException = RuntimeError
+    monkeypatch.setattr(GEEClient, "_ee", staticmethod(lambda: ee))
+    session = MagicMock()
+    session.request.return_value = response
+    client = GEEClient(project="p")
+    monkeypatch.setattr(client, "_session", lambda credentials: session)
+    return client, session
+
+
+def test_response_is_reported_while_it_streams_in(monkeypatch):
+    client, session = _streaming_client(monkeypatch, FakeResponse([b"a" * 100, b"b" * 60]))
+    seen = []
+
+    data = client._compute_pixels({"expression": "image"}, lambda network, payload: seen.append((network, payload)),
+                                  lambda: False)
+
+    assert data == b"a" * 100 + b"b" * 60
+    assert seen == [(50, 100), (30, 60)]  # network bytes (compressed) and response bytes, block by block
+    assert session.request.call_args.kwargs["stream"] is True
+
+
+def test_earth_engine_error_response_is_raised_with_its_message(monkeypatch):
+    client, _ = _streaming_client(monkeypatch, FakeResponse([], status=400, error="User memory limit exceeded."))
+    with pytest.raises(RuntimeError, match="User memory limit exceeded"):
+        client._compute_pixels({"expression": "image"}, lambda *a: None, lambda: False)
+
+
+def test_pause_stops_a_streaming_response(monkeypatch):
+    client, _ = _streaming_client(monkeypatch, FakeResponse([b"a" * 10, b"b" * 10]))
+    with pytest.raises(gee_module._Stopped):
+        client._compute_pixels({"expression": "image"}, lambda *a: None, lambda: True)
+
+
+def test_progress_of_unwritten_tiles_is_taken_back():
+    events = []
+    reporter = gee_module._ChunkReporter(lambda raster, network: events.append((raster, network)))
+    first, second = reporter.receiver(0, 100), reporter.receiver(1, 100)
+    first(40, 60)
+    second(30, 150)          # more than the tile's raster size: progress stops at 100
+    reporter.written(1, 100)
+    reporter.close()         # tile 0 was not written: its 60 come back off
+    first(10, 10)            # an abandoned request finishing later is ignored
+
+    assert events == [(60, 40), (100, 30), (-60, 0)]

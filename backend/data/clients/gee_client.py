@@ -10,6 +10,9 @@ quarters instead (and those split again if needed, down to ``MIN_SPLIT_PIXELS``)
 and stitched back together. Later tiles of the same request start at that smaller
 size, so they do not fail first.
 
+Responses are read as they stream in, so progress and speed are reported while a
+tile arrives, not only once it is complete (see ``_ChunkReporter``).
+
 Earth Engine must be signed in once on the computer (``earthengine authenticate``)
 and ``GEE_PROJECT`` in .env must name a Cloud project registered for Earth Engine.
 """
@@ -34,6 +37,12 @@ logger = logging.getLogger(__name__)
 
 PARALLEL_REQUESTS = 4      # tiles requested from GEE at the same time
 MIN_SPLIT_PIXELS = 256 * 256  # a too-heavy tile is not split below this
+STREAM_BLOCK = 64 * 1024      # bytes read at a time from a GEE response
+READ_TIMEOUT = 600            # seconds GEE may take before sending a response
+
+
+class _Stopped(Exception):
+    """The download was paused or cancelled while a response was streaming in."""
 NODATA = -9999.0           # value of pixels outside the AOI or without imagery
 
 
@@ -50,6 +59,7 @@ class GEEClient(IGEEClient):
         self._initialized = False
         self._lock = threading.Lock()
         self._splits: dict[str, int] = {}  # request -> times its tiles had to be split
+        self._sessions = threading.local()  # one HTTP session per download thread
 
     # ------------------------------------------------------------- access
     def validate_access(self) -> bool:
@@ -117,6 +127,7 @@ class GEEClient(IGEEClient):
             progress.clear()
             pending = tiles
             dst = _open_chunk_file(target, chunk, resume=False)
+        reporter = _ChunkReporter(on_progress)
         with dst:
             pool = ThreadPoolExecutor(max_workers=self._parallel, thread_name_prefix="gee-tile")
             try:
@@ -130,7 +141,9 @@ class GEEClient(IGEEClient):
                     if tile is not None:
                         with self._lock:
                             splits = self._splits.get(key, 0)
-                        running[pool.submit(self._fetch_pixels, image, chunk, tile, splits)] = tile
+                        size = tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL
+                        on_bytes = reporter.receiver(tile.index, size)
+                        running[pool.submit(self._fetch_pixels, image, chunk, tile, splits, on_bytes, stop)] = tile
 
                 for _ in range(self._parallel):
                     submit_next()
@@ -138,17 +151,20 @@ class GEEClient(IGEEClient):
                     finished, _ = wait(running, return_when=FIRST_COMPLETED)
                     for future in finished:
                         tile = running.pop(future)
-                        pixels, received, splits = future.result()  # GEEError propagates to the caller
+                        try:
+                            pixels, splits = future.result()  # GEEError propagates to the caller
+                        except _Stopped:
+                            return False
                         with self._lock:
                             self._splits[key] = max(self._splits.get(key, 0), splits)
                         _write_tile(dst, pixels, tile)
                         progress.add(tile.index)
-                        if on_progress:  # raster bytes (they add up to the chunk's planned size), bytes received
-                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL, received)
+                        reporter.written(tile.index, tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL)
                         if stop():
                             return False  # requests still in flight are abandoned
                         submit_next()
             finally:
+                reporter.close()  # takes back the progress of tiles that were not written
                 pool.shutdown(wait=False, cancel_futures=True)
         progress.clear()
         return True
@@ -179,12 +195,15 @@ class GEEClient(IGEEClient):
         except Exception as exc:
             raise _error(exc, self._project) from exc
 
-    def _fetch_pixels(self, image: Any, chunk: ChunkDTO, tile: Tile, splits: int) -> tuple[Any, int, int]:
-        """Pixels of ``tile`` (bands x height x width), the bytes received for them, and how many
-        times the tile had to be split. ``splits`` > 0 starts with that many splits already."""
+    def _fetch_pixels(
+        self, image: Any, chunk: ChunkDTO, tile: Tile, splits: int,
+        on_bytes: "_BytesCallback", stop: StopCheck,
+    ) -> tuple[Any, int]:
+        """Pixels of ``tile`` (bands x height x width) and how many times the tile had to be split.
+        ``splits`` > 0 starts with that many splits already."""
         if splits == 0 or not _can_split(tile):
             try:
-                data = self._fetch_tile(image, chunk, tile)
+                data = self._fetch_tile(image, chunk, tile, on_bytes, stop)
             except GEERequestTooHeavyError:
                 if not _can_split(tile):
                     raise
@@ -192,21 +211,22 @@ class GEEClient(IGEEClient):
                             tile.index, chunk.id)
                 splits = 1
             else:
-                return _decode_tile(data, tile, chunk), len(data), 0
+                return _decode_tile(data, tile, chunk), 0
 
         import numpy as np
 
         pixels = np.empty((len(chunk.bands), tile.height, tile.width), dtype="float32")
-        received, start = 0, splits - 1
+        start = splits - 1
         for part in _quarters(tile):
-            part_pixels, part_received, part_splits = self._fetch_pixels(image, chunk, part, start)
+            part_pixels, part_splits = self._fetch_pixels(image, chunk, part, start, on_bytes, stop)
             pixels[:, part.row - tile.row:part.row - tile.row + part.height,
                    part.col - tile.col:part.col - tile.col + part.width] = part_pixels
-            received += part_received
             start = max(start, part_splits)  # the next quarters start as small as this one had to be
-        return pixels, received, start + 1
+        return pixels, start + 1
 
-    def _fetch_tile(self, image: Any, chunk: ChunkDTO, tile: Tile) -> bytes:
+    def _fetch_tile(
+        self, image: Any, chunk: ChunkDTO, tile: Tile, on_bytes: "_BytesCallback", stop: StopCheck,
+    ) -> bytes:
         """GeoTIFF bytes of one tile, on the chunk's grid shifted to the tile's corner."""
         a, b, c, d, e, f = chunk.transform
         request = {
@@ -222,9 +242,56 @@ class GEEClient(IGEEClient):
             },
         }
         try:
-            return self._ee().data.computePixels(request)
+            return self._compute_pixels(request, on_bytes, stop)
+        except _Stopped:
+            raise
         except Exception as exc:
             raise _error(exc, self._project) from exc
+
+    def _compute_pixels(self, request: dict, on_bytes: "_BytesCallback", stop: StopCheck) -> bytes:
+        """``ee.data.computePixels``, but reading the response as it streams in.
+
+        The Earth Engine library only returns a response once all of it has arrived,
+        so the request it builds is sent here instead. If the library internals are
+        not as expected, the library is called directly (no live progress).
+        """
+        ee = self._ee()
+        try:
+            from ee import serializer
+
+            body = dict(request, expression=serializer.encode(request["expression"]))
+            call = ee.data._get_cloud_projects_raw().image().computePixels(
+                project=ee.data._get_projects_path(), body=body,
+            )
+            session = self._session(ee.data._get_state().credentials)
+        except Exception:
+            logger.debug("Streaming is not available; using ee.data.computePixels", exc_info=True)
+            data = ee.data.computePixels(request)
+            on_bytes(len(data), len(data))
+            return data
+
+        with session.request(call.method, call.uri, data=call.body, headers=call.headers,
+                             stream=True, timeout=(30, READ_TIMEOUT)) as response:
+            if response.status_code != 200:
+                raise ee.EEException(_error_message(response))
+            parts, wire = [], 0
+            for block in response.iter_content(STREAM_BLOCK):
+                if stop():
+                    raise _Stopped()
+                parts.append(block)
+                now = response.raw.tell()  # bytes off the network (before any decompression)
+                on_bytes(now - wire, len(block))
+                wire = now
+            return b"".join(parts)
+
+    def _session(self, credentials: Any) -> Any:
+        from google.auth.transport.requests import AuthorizedSession
+
+        session = getattr(self._sessions, "session", None)
+        if session is None or session.credentials is not credentials:
+            session = AuthorizedSession(credentials)
+            self._sessions.session = session
+        return session
 
 
 # ----------------------------------------------------------------------------- GeoTIFF writing
@@ -250,10 +317,67 @@ def _open_chunk_file(path: Path, chunk: ChunkDTO, resume: bool):
         width=chunk.width, height=chunk.height, count=len(chunk.bands), dtype="float32",
         crs=chunk.crs, transform=Affine(*chunk.transform), nodata=NODATA,
         tiled=True, blockxsize=256, blockysize=256, BIGTIFF="IF_SAFER",
+        SPARSE_OK="TRUE",  # blocks not downloaded yet take no disk space (even after a pause)
     )
     for index, band in enumerate(chunk.bands, start=1):
         dst.set_band_description(index, band)
     return dst
+
+
+_BytesCallback = Any  # (bytes off the network, bytes of the response) -> None
+
+
+class _ChunkReporter:
+    """Reports a chunk's progress to the download service while its tiles stream in.
+
+    While a tile arrives, the response bytes count as provisional progress (at most the
+    tile's raster size); once the tile is written, its progress becomes exactly its
+    raster size. When the chunk stops (paused, failed), the provisional progress of
+    tiles that were not written is taken back, so the progress bar never runs ahead
+    of the data on disk. Bytes from requests abandoned after that are ignored.
+    """
+
+    def __init__(self, on_progress: Optional[ProgressCallback]):
+        self._on_progress = on_progress or (lambda raster, received: None)
+        self._lock = threading.Lock()
+        self._shown: dict[int, int] = {}     # tile index -> provisional progress reported
+        self._streamed: dict[int, int] = {}  # tile index -> response bytes received so far
+        self._closed = False
+
+    def receiver(self, index: int, size: int) -> _BytesCallback:
+        def on_bytes(network: int, payload: int) -> None:
+            with self._lock:
+                if self._closed:
+                    return
+                self._streamed[index] = self._streamed.get(index, 0) + payload
+                shown = min(self._streamed[index], size)
+                delta = shown - self._shown.get(index, 0)
+                self._shown[index] = shown
+                self._on_progress(delta, network)
+        return on_bytes
+
+    def written(self, index: int, size: int) -> None:
+        with self._lock:
+            delta = size - self._shown.pop(index, 0)
+            self._streamed.pop(index, None)
+            if delta:
+                self._on_progress(delta, 0)
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed = True
+            unwritten = sum(self._shown.values())
+            self._shown.clear()
+            if unwritten:
+                self._on_progress(-unwritten, 0)
+
+
+def _error_message(response: Any) -> str:
+    """The message of an Earth Engine error response."""
+    try:
+        return response.json()["error"]["message"]
+    except Exception:
+        return f"HTTP {response.status_code}: {response.text[:300]}"
 
 
 def _decode_tile(data: bytes, tile: Tile, chunk: ChunkDTO) -> Any:
