@@ -13,13 +13,14 @@ from dataclasses import replace
 from datetime import date
 
 from backend.business.request.geojson_utils import validate_geometry
-from backend.config import COMPOSITE_METHODS, get_dataset
-from backend.dto import FormDTO
+from backend.business.request.query_entities import date_range
+from backend.config import ANALYSIS_CATEGORIES, COMPOSITE_METHODS, get_dataset
+from backend.dto import EntityDTO, FormDTO
 
 
 def check_interpretation(form: FormDTO, today: date | None = None) -> FormDTO:
     today = today or date.today()
-    notes: list[str] = []
+    notes: list[str] = list(form.notes)  # keep notes from earlier steps
     info = get_dataset(form.dataset)
 
     if info is None:
@@ -90,3 +91,64 @@ def _checked_place_and_time(form: FormDTO, info, today: date, notes: list[str]) 
         start = end = None
 
     return {"aoi": aoi, "start_date": start, "end_date": end}
+
+
+# ----------------------------------------------------------------------------- named entities
+def _unique(entities: list[EntityDTO], label: str) -> list[str]:
+    return list(dict.fromkeys(e.value for e in entities if e.label == label and e.value))
+
+
+def _category_of(process: str) -> str:
+    return next(cat for cat, processes in ANALYSIS_CATEGORIES.items() if process in processes)
+
+
+def ground_with_entities(form: FormDTO, entities: list[EntityDTO]) -> FormDTO:
+    """Make what the user explicitly wrote win over the LLM's guess.
+
+    Datasets, processes, bands, cloud cover, resolution and composite named in
+    the query override Gemini's choice; dates and place only fill gaps, because
+    Gemini resolves phrases like "last summer" better than patterns do.
+    """
+    notes = list(form.notes)
+    changes: dict = {}
+
+    datasets = _unique(entities, "DATASET")
+    if len(datasets) == 1 and datasets[0] != form.dataset:
+        wanted, suggested = get_dataset(datasets[0]), get_dataset(form.dataset)
+        if suggested is not None:
+            notes.append(f"Used {wanted.name} as written in your request (Gemini suggested {suggested.name}).")
+        changes.update(dataset=datasets[0], bands=[])  # bands chosen for another dataset don't apply
+
+    if bands := _unique(entities, "BAND"):
+        changes["bands"] = bands
+    if cloud := _unique(entities, "CLOUD_COVER"):
+        changes["max_cloud_cover"] = int(cloud[-1])
+    if resolution := _unique(entities, "RESOLUTION"):
+        changes["scale"] = int(resolution[-1])
+    if composite := _unique(entities, "COMPOSITE"):
+        changes["composite"] = composite[-1]
+
+    if processes := _unique(entities, "PROCESS"):
+        categories = list(dict.fromkeys(_category_of(p) for p in processes))
+        category = form.analysis_type if form.analysis_type in categories else categories[0]
+        named = [p for p in processes if _category_of(p) == category]
+        kept = [p for p in form.processes if p not in named] if form.analysis_type == category else []
+        changes.update(analysis_type=category, processes=named + kept)
+
+    if form.start_date is None and form.end_date is None:
+        start, end = date_range(entities)
+        if start:
+            changes.update(start_date=start, end_date=end)
+
+    places = list(dict.fromkeys(e.value for e in entities if e.label == "PLACE"))
+    if places and not form.aoi_name:
+        changes["aoi_name"] = ", ".join(places)
+    if places and not form.aoi:
+        notes.append(f"Couldn't locate {', '.join(places)} automatically; draw the area on the map.")
+
+    return replace(form, **changes, notes=notes, entities=list(entities))
+
+
+def has_form_values(form: FormDTO) -> bool:
+    return any((form.dataset, form.processes, form.bands, form.start_date, form.aoi,
+                form.max_cloud_cover is not None, form.scale))
