@@ -89,7 +89,7 @@ def test_chunk_is_written_tile_by_tile_on_the_chunk_grid(tmp_path):
         assert src.descriptions == ("B4", "B8") and src.nodata == NODATA
     assert pixels.shape == (2, 40, 50)
     assert [pixels[0, row, 0] for row in (0, 10, 20, 30)] == [1, 2, 3, 4]  # 4 tiles of 10 rows
-    assert len(received) == 4 and all(n > 0 for n in received)
+    assert received == [50 * 10 * 2 * 4] * 4  # raster bytes per tile; they add up to the chunk size
     assert not path.with_name(path.name + ".tiles.json").exists()
 
 
