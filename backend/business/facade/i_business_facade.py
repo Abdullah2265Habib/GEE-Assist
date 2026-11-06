@@ -110,3 +110,7 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def is_gee_available(self) -> bool: ...
+
+    @abstractmethod
+    def shutdown_downloads(self) -> None:
+        """Called when the app closes: the active download is paused and resumes next time."""
