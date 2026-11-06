@@ -28,14 +28,17 @@ from pathlib import Path
 from typing import Any, Optional
 
 from backend.config import BYTES_PER_PIXEL, get_dataset
-from backend.data.clients.gee_tiles import TARGET_REQUEST_BYTES, Tile, plan_tiles
+from backend.data.clients.gee_tiles import Tile, plan_tiles
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.dto import ChunkDTO, FormDTO
 from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
 
-PARALLEL_REQUESTS = 4      # tiles requested from GEE at the same time
+PARALLEL_REQUESTS = 8      # tiles requested from GEE at the same time
+# Bytes per request as GEE counts them, well under its 48 MB cap: GEE computes a small
+# request much sooner, so data starts arriving earlier and keeps arriving steadily.
+REQUEST_BYTES = 4_000_000
 MIN_SPLIT_PIXELS = 256 * 256  # a too-heavy tile is not split below this
 STREAM_BLOCK = 64 * 1024      # bytes read at a time from a GEE response
 READ_TIMEOUT = 600            # seconds GEE may take before sending a response
@@ -51,7 +54,7 @@ class GEEClient(IGEEClient):
         self,
         project: str = "",
         parallel_requests: int = PARALLEL_REQUESTS,
-        max_request_bytes: int = TARGET_REQUEST_BYTES,
+        max_request_bytes: int = REQUEST_BYTES,
     ):
         self._project = project
         self._parallel = max(1, parallel_requests)
