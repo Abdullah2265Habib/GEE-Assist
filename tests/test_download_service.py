@@ -25,7 +25,7 @@ from backend.dto.download_dto import (  # noqa: E402
     JOB_QUEUED,
     JOB_RUNNING,
 )
-from backend.exceptions import GEEError, ValidationError  # noqa: E402
+from backend.exceptions import GEEError, GEESetupError, ValidationError  # noqa: E402
 
 # 0.05 degree square at 10 m: 557 x 557 px, 1 band -> ~1.24 MB; with 1 MB chunks -> 2 chunks.
 AOI = {"type": "Polygon", "coordinates": [[[73.0, 31.0], [73.05, 31.0], [73.05, 31.05], [73.0, 31.05], [73.0, 31.0]]]}
@@ -36,12 +36,15 @@ class FakeData:
 
     def __init__(self):
         self.failures: dict[int, int] = {}   # chunk id -> failures left
+        self.setup_error: Exception | None = None
         self.gate: threading.Event | None = None
         self.calls: list[int] = []
         self.gee_ok = True
 
     def fetch_chunk(self, chunk, path, on_progress=None, should_stop=None):
         self.calls.append(chunk.id)
+        if self.setup_error:
+            raise self.setup_error
         if self.failures.get(chunk.id, 0) > 0:
             self.failures[chunk.id] -= 1
             raise GEEError("Earth Engine is busy")
@@ -203,6 +206,28 @@ def test_chunk_failing_past_the_retry_limit_fails_the_job(env):
     assert job.chunks[1].status == CHUNK_FAILED
     assert "Chunk 2 failed after 3 attempts" in job.error
     assert job.chunks[0].status == CHUNK_MERGED  # finished work is kept
+
+
+def test_setup_problem_fails_at_once_without_retries(env):
+    make, data, tmp_path = env
+    data.setup_error = GEESetupError("The Earth Engine API is not enabled for project 'p'.")
+    service = make()
+    job = _wait(service, service.start_download(_form(tmp_path)), JOB_FAILED)
+
+    assert data.calls == [1]  # tried once, no retries
+    assert job.error == "The Earth Engine API is not enabled for project 'p'."
+    assert job.chunks[0].status == CHUNK_FAILED and job.chunks[0].retries == 0
+
+    data.setup_error = None  # the user enabled the API
+    assert _wait(service, service.retry_failed_chunks(job), JOB_COMPLETED).progress == 1.0
+
+
+def test_request_without_images_fails_at_once(env):
+    make, data, tmp_path = env
+    data.setup_error = ValidationError("No Sentinel-2 images match this request.")
+    service = make()
+    job = _wait(service, service.start_download(_form(tmp_path)), JOB_FAILED)
+    assert data.calls == [1] and "No Sentinel-2 images" in job.error
 
 
 def test_retry_failed_chunks_finishes_the_job(env):
