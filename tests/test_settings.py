@@ -26,3 +26,8 @@ def test_session_duration_comes_from_the_environment(monkeypatch):
 def test_invalid_session_duration_falls_back_to_seven_days(monkeypatch):
     monkeypatch.setenv("SESSION_DURATION", "soon")
     assert settings._session_duration() == 7 * 24 * 3600
+
+
+def test_gee_project_comes_from_the_environment(monkeypatch):
+    monkeypatch.setenv("GEE_PROJECT", " my-ee-project ")
+    assert settings.get_settings.__wrapped__().gee_project == "my-ee-project"  # bypass the cache

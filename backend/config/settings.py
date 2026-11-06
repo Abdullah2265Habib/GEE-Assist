@@ -30,6 +30,8 @@ class Settings:
     keyring_service: str = "GEE-Assist"
     # How long "Keep me signed in" lasts, in seconds, counted from signing in.
     session_duration: float = 7 * 24 * 3600
+    # Google Cloud project registered for Earth Engine (dataset downloads).
+    gee_project: str = ""
 
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -63,4 +65,5 @@ def get_settings() -> Settings:
         auth_api_timeout=float(os.getenv("AUTH_API_TIMEOUT", Settings.auth_api_timeout)),
         keyring_service=os.getenv("KEYRING_SERVICE", Settings.keyring_service),
         session_duration=_session_duration(),
+        gee_project=os.getenv("GEE_PROJECT", Settings.gee_project).strip(),
     )
