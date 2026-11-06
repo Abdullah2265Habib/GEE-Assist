@@ -15,7 +15,7 @@ def test_first_load_creates_the_file_with_a_500_mb_chunk_size(store):
     settings = store.load()
 
     assert settings.chunk_size_mb == DEFAULT_CHUNK_SIZE_MB == 500
-    assert settings.chunk_size_bytes == 500 * 1024 * 1024
+    assert settings.chunk_size_bytes == 500_000_000  # decimal megabytes
     assert json.loads(store.path.read_text())["chunk_size_mb"] == 500
 
 
