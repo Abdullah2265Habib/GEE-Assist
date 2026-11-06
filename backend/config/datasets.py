@@ -262,3 +262,52 @@ def datasets_by_category() -> dict[str, list[DatasetInfo]]:
     for info in _DATASET_LIST:
         grouped.setdefault(info.category, []).append(info)
     return {c: items for c, items in grouped.items() if items}
+
+
+# ----------------------------------------------------------------------------- query vocabulary
+# Phrases users write for each dataset / process. Used by the query entity
+# classifier (backend/business/request/query_entities.py). Hyphens and spaces
+# are interchangeable ("sentinel-2" also matches "sentinel 2" and "sentinel2").
+DATASET_ALIASES: dict[str, tuple[str, ...]] = {
+    "sentinel2_sr": ("sentinel-2", "sentinel-2 sr", "sentinel-2 l2a", "sentinel-2 surface reflectance", "s2"),
+    "sentinel2_toa": ("sentinel-2 l1c", "sentinel-2 toa", "sentinel-2 top of atmosphere"),
+    "landsat9_l2": ("landsat-9", "landsat 9 l2"),
+    "landsat8_l2": ("landsat-8", "landsat 8 l2"),
+    "landsat7_l2": ("landsat-7", "landsat 7 l2"),
+    "landsat5_l2": ("landsat-5", "landsat 5 l2", "landsat 5 tm"),
+    "modis_sr_8day": ("mod09a1", "modis surface reflectance", "modis reflectance"),
+    "sentinel1_grd": ("sentinel-1", "s1", "sar", "radar", "sentinel-1 sar"),
+    "modis_vi_16day": ("mod13q1", "modis ndvi", "modis evi", "modis vegetation"),
+    "modis_lst": ("mod11a2", "modis lst", "modis terra lst", "modis land surface temperature"),
+    "modis_lst_aqua": ("myd11a2", "modis aqua", "aqua lst", "modis aqua lst"),
+    "era5_land_daily": ("era5", "era5-land", "era-5", "era5 land", "climate reanalysis"),
+    "dynamic_world": ("dynamic world",),
+    "modis_landcover": ("mcd12q1", "modis land cover", "modis landcover"),
+    "jrc_water_monthly": ("jrc", "jrc water", "global surface water", "jrc global surface water"),
+}
+
+PROCESS_ALIASES: dict[str, tuple[str, ...]] = {
+    "NDVI": ("ndvi", "normalized difference vegetation index", "normalised difference vegetation index"),
+    "EVI": ("evi", "enhanced vegetation index"),
+    "SAVI": ("savi", "soil adjusted vegetation index", "soil-adjusted vegetation index"),
+    "GNDVI": ("gndvi", "green ndvi"),
+    "NDWI": ("ndwi", "normalized difference water index", "normalised difference water index"),
+    "MNDWI": ("mndwi", "modified ndwi", "modified normalized difference water index"),
+    "WaterBodyDetection": ("water body", "water bodies", "waterbodies", "flood", "floods", "flooding",
+                           "flood mapping", "inundation", "surface water extent"),
+    "WaterAreaEstimation": ("water area", "area of water", "water surface area", "water extent"),
+    "LSTMapping": ("land surface temperature", "lst", "surface temperature", "temperature map"),
+    "LSTTemporalAnalysis": ("temperature trend", "temperature trends", "temperature change", "warming trend",
+                            "heat trend"),
+    "LULCChangeDetection": ("land cover change", "land use change", "lulc change", "lulc", "urban growth",
+                            "urban expansion", "urbanisation", "urbanization", "deforestation"),
+    "LULCTransition": ("land cover transition", "land use transition", "lulc transition"),
+}
+
+# Words that point to an analysis category without naming a process.
+ANALYSIS_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "Vegetation": ("vegetation", "crop", "crops", "greenness", "forest", "plant health"),
+    "Water": ("water", "lake", "lakes", "river", "rivers", "reservoir", "wetland", "wetlands"),
+    "LST": ("temperature", "thermal", "heat", "heatwave", "urban heat"),
+    "LULC": ("land cover", "land use", "landcover", "urban", "built-up", "built up"),
+}
