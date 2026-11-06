@@ -38,6 +38,7 @@ from frontend.widgets.speed_chart import SpeedChart
 from frontend.workers.task_worker import run_task
 
 REFRESH_MS = 500
+NONE = "–"   # shown when no download is running
 
 STYLESHEET = f"""
 #DownloadPage {{ background: transparent; }}
@@ -293,9 +294,9 @@ class DownloadView(QWidget):
         values = {
             "CURRENT": format_speed(speed),
             "PEAK": format_speed(self._peak),
-            "DOWNLOADED": format_size(sum(_received(job) for job in jobs)),
+            "DOWNLOADED": format_size(running.received_bytes) if running else NONE,  # current download only
             "REMAINING": format_size(sum(max(0, job.total_bytes - job.downloaded_bytes) for job in active)),
-            "DISK USAGE": format_size(sum(job.disk_bytes for job in jobs)),
+            "DISK USAGE": format_size(running.disk_bytes) if running else NONE,
             "MERGING SPEED": format_speed(merge_speed),
         }
         for name, value in values.items():
@@ -336,9 +337,3 @@ class DownloadView(QWidget):
         section.rows.removeWidget(row)
         row.deleteLater()
 
-
-def _received(job: DownloadJobDTO) -> int:
-    """Bytes received from GEE. Downloads finished before this was recorded count their file size."""
-    if job.received_bytes == 0 and job.status == JOB_COMPLETED and job.dataset:
-        return job.dataset.size_bytes
-    return job.received_bytes
