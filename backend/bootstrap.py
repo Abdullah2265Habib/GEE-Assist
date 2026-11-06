@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from backend.business.download import Chunker, ChunkMerger, DownloadService
 from backend.business.facade import BusinessFacade, IBusinessFacade
 from backend.business.request import RequestService
 from backend.business.user import UserService
+from backend.config import DEFAULT_DOWNLOAD_DIR, DownloadSettingsStore
 from backend.config.llm import load_llm_settings
 from backend.config.settings import get_settings
 from backend.data.clients.auth_api_client import AuthApiClient
@@ -29,4 +31,18 @@ def build_business_facade() -> IBusinessFacade:
     )
     request_service = RequestService(data_facade=data_facade)
 
-    return BusinessFacade(user_service=user_service, request_service=request_service)
+    download_settings = DownloadSettingsStore()
+    download_service = DownloadService(
+        data_facade=data_facade,
+        chunker=Chunker(download_settings),
+        chunk_merger=ChunkMerger(),
+        download_dir=DEFAULT_DOWNLOAD_DIR,
+        retry_limit=download_settings.load().retry_limit,
+        settings=download_settings,
+    )
+
+    return BusinessFacade(
+        user_service=user_service,
+        request_service=request_service,
+        download_service=download_service,
+    )
