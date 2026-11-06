@@ -28,7 +28,7 @@ SETTINGS_FILE = PROJECT_ROOT / "workspace" / "download_settings.json"
 DEFAULT_CHUNK_SIZE_MB = 500
 MIN_CHUNK_SIZE_MB = 1
 MAX_CHUNK_SIZE_MB = 100 * 1024     # 100 GB
-DEFAULT_RETRY_LIMIT = 3            # attempts per chunk before the job is marked failed
+DEFAULT_RETRY_LIMIT = 3            # retries per chunk after its first failed attempt
 MAX_RETRY_LIMIT = 20
 
 # Decimal units, as storage is usually labelled: 2 GB = 2000 MB = 4 chunks of 500 MB.
