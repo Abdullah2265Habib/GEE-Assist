@@ -104,7 +104,13 @@ class GEEClient(IGEEClient):
         self._initialize()
         image = self._build_image(chunk.request, chunk.bands)
         target.parent.mkdir(parents=True, exist_ok=True)
-        with _open_chunk_file(target, chunk, resume=bool(progress.done)) as dst:
+        dst = _open_chunk_file(target, chunk, resume=bool(progress.done))
+        if dst is None:  # the partly written file is damaged (e.g. the app was killed): start over
+            logger.warning("Chunk file %s cannot be reopened; downloading the chunk again", target)
+            progress.clear()
+            pending = tiles
+            dst = _open_chunk_file(target, chunk, resume=False)
+        with dst:
             pool = ThreadPoolExecutor(max_workers=self._parallel, thread_name_prefix="gee-tile")
             try:
                 queue = iter(pending)
@@ -183,11 +189,22 @@ class GEEClient(IGEEClient):
 
 # ----------------------------------------------------------------------------- GeoTIFF writing
 def _open_chunk_file(path: Path, chunk: ChunkDTO, resume: bool):
+    """Open the chunk GeoTIFF to continue writing it, or create it.
+
+    Returns None if a partly written file cannot be reopened or does not match the chunk.
+    """
     import rasterio
     from rasterio.transform import Affine
 
     if resume and path.exists():
-        return rasterio.open(path, "r+")
+        try:
+            dst = rasterio.open(path, "r+")
+        except Exception:
+            return None
+        if (dst.width, dst.height, dst.count) != (chunk.width, chunk.height, len(chunk.bands)):
+            dst.close()
+            return None
+        return dst
     dst = rasterio.open(
         path, "w", driver="GTiff",
         width=chunk.width, height=chunk.height, count=len(chunk.bands), dtype="float32",
