@@ -19,7 +19,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from backend.config import get_dataset
+from backend.config import BYTES_PER_PIXEL, get_dataset
 from backend.data.clients.gee_tiles import TARGET_REQUEST_BYTES, Tile, plan_tiles
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.dto import ChunkDTO, FormDTO
@@ -124,8 +124,8 @@ class GEEClient(IGEEClient):
                         data = future.result()  # GEEError propagates to the caller
                         _write_tile(dst, data, tile, chunk)
                         progress.add(tile.index)
-                        if on_progress:
-                            on_progress(len(data))
+                        if on_progress:  # raster bytes added, matching the chunk's planned size
+                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL)
                         if stop():
                             return False  # requests still in flight are abandoned
                         submit_next()

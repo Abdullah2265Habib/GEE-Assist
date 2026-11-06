@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from backend.dto import ChunkDTO
 
-ProgressCallback = Callable[[int], None]   # receives the bytes just received from GEE
+ProgressCallback = Callable[[int], None]   # receives the raster bytes just written (float32)
 StopCheck = Callable[[], bool]             # True when the download is paused or cancelled
 
 
