@@ -56,7 +56,11 @@ How it works:
 
 - The request is split into **chunks of 500 MB** (`workspace/download_settings.json`, or
   **Change…** on the Downloads page; applies to new downloads). A 2 GB dataset is 4 chunks.
-- Each chunk is fetched from GEE as several requests under GEE's 48 MB limit.
+- Each chunk is fetched from GEE as small requests (about 4 MB, 8 at a time), far under GEE's
+  48 MB limit: GEE computes small requests sooner, so data arrives early and steadily. Responses
+  are read as they stream in and each piece is written to disk as soon as it arrives, so the
+  speed graph, progress bar, DOWNLOADED, REMAINING and DISK USAGE update live. No data arrives
+  while GEE is still computing, so the speed is 0 then, as in Task Manager.
 - If GEE runs out of memory on a request (e.g. a median over many years), that request is
   fetched as four smaller ones, split again if needed, and the rest of the download starts at
   that size. If even small requests fail, the download stops with a message: shorten the date
