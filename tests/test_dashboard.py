@@ -83,11 +83,30 @@ def test_collapsed_side_bar_shows_short_labels(home):
     assert home.downloads_button.text() == "Downloads" and not home.profile.name.isHidden()
 
 
-def test_clicking_the_user_opens_the_account_page(home):
+def test_profile_menu_offers_the_account_options(home, monkeypatch):
+    shown = []
+    monkeypatch.setattr(home.account_menu, "popup", shown.append)
     home.profile.clicked.emit()
+
+    assert len(shown) == 1
+    names = [action.text() for action in home.account_menu.actions()]
+    assert names == ["Manage account  (coming soon)", "View account", "Sign-up details"]
+    assert not home.manage_account_action.isEnabled()
+
+
+def test_view_account_opens_the_account_page(home):
+    home.view_account_action.trigger()
 
     assert home.current_page() is not home.dashboard
     assert not home.dashboard_button.isHidden()
+
+
+def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home_window.SignupDetailsDialog, "exec",
+                        lambda dialog: opened.append(dialog.values["username"].text()))
+    home.signup_details_action.trigger()
+    assert opened == ["ayesha"]
 
 
 def test_unbuilt_workspaces_are_disabled_placeholders(home):

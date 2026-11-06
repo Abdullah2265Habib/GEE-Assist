@@ -3,18 +3,19 @@
 A side bar on the left (logo, navigation, the signed-in user and "Sign out") next to
 four pages: the dashboard (start page), the query-input workspace, downloads and the
 account card. Clicking the logo slides the side bar open or closed; clicking the user
-opens the account card.
+opens the account menu.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtGui import QAction, QMouseEvent
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -24,13 +25,20 @@ from PyQt6.QtWidgets import (
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO
 from frontend import theme
-from frontend.views.account_view import AccountView, Avatar
+from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
 from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
+
+MENU_STYLE = f"""
+QMenu {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 8px; padding: 6px; }}
+QMenu::item {{ color: {theme.INK}; padding: 8px 18px; border-radius: 6px; }}
+QMenu::item:selected {{ background: {theme.FOAM}; }}
+QMenu::item:disabled {{ color: {theme.SUBTLE}; }}
+"""
 
 
 class ProfileButton(QFrame):
@@ -84,6 +92,7 @@ class HomeWindow(QMainWindow):
     def __init__(self, facade: IBusinessFacade, user: UserDTO, parent: QWidget | None = None):
         super().__init__(parent)
         self._facade = facade
+        self._user = user
         self.setWindowTitle("GEE-Assist")
         self.setMinimumSize(1000, 680)
 
@@ -97,6 +106,16 @@ class HomeWindow(QMainWindow):
         self.profile = ProfileButton()
         self.side_bar.add_widget(self.profile, footer=True)
         self.sign_out_button = self.side_bar.add_button("Sign out", "S", footer=True)
+
+        # ---- account menu
+        self.account_menu = QMenu(self)
+        self.account_menu.setStyleSheet(MENU_STYLE)
+        self.manage_account_action = QAction("Manage account  (coming soon)", self)
+        self.manage_account_action.setEnabled(False)
+        self.view_account_action = QAction("View account", self)
+        self.signup_details_action = QAction("Sign-up details", self)
+        for action in (self.manage_account_action, self.view_account_action, self.signup_details_action):
+            self.account_menu.addAction(action)
 
         # ---- pages
         self.dashboard = DashboardView()
@@ -148,7 +167,9 @@ class HomeWindow(QMainWindow):
         )
         self.manage_users.clicked.connect(self._open_user_admin)
         self.dashboard_button.clicked.connect(self.show_dashboard)
-        self.profile.clicked.connect(self.show_account)
+        self.profile.clicked.connect(self.show_account_menu)
+        self.view_account_action.triggered.connect(self.show_account)
+        self.signup_details_action.triggered.connect(self.show_signup_details)
         self.dashboard.open_query_input.connect(self.show_query_input)
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.downloads_button.clicked.connect(self.show_downloads)
@@ -183,6 +204,14 @@ class HomeWindow(QMainWindow):
         self.dashboard_button.setVisible(page is not self.dashboard)
         self.downloads_button.setVisible(page is not self.downloads)
 
+    # ------------------------------------------------------------- account
+    def show_account_menu(self) -> None:
+        """The account menu, opening to the right of the user in the side bar."""
+        self.account_menu.popup(self.profile.mapToGlobal(QPoint(self.profile.width() + 6, 0)))
+
+    def show_signup_details(self) -> None:
+        SignupDetailsDialog(self._user, self).exec()
+
     def _open_user_admin(self) -> None:
         if self._admin_dialog is None:
             self._admin_dialog = UserAdminDialog(self._facade, self)
@@ -196,6 +225,7 @@ class HomeWindow(QMainWindow):
         self._admin_dialog.activateWindow()
 
     def set_user(self, user: UserDTO) -> None:
+        self._user = user
         self.profile.set_user(user)
         self.manage_users.setVisible(user.is_admin)
         self.account.set_user(user)
