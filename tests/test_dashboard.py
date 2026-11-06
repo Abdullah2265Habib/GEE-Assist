@@ -10,7 +10,7 @@ import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
 from PyQt6.QtCore import pyqtSignal  # noqa: E402
-from PyQt6.QtWidgets import QApplication, QMainWindow  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow  # noqa: E402
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
@@ -68,11 +68,25 @@ def test_dashboard_button_returns_to_the_dashboard(home):
     assert home.current_page() is home.dashboard
 
 
-def test_account_page_is_reachable_from_the_header(home):
-    home.account_button.click()
+def test_navigation_is_in_a_side_bar_without_the_app_name(home):
+    texts = [label.text() for label in home.findChildren(QLabel)]
+    assert "GEE-Assist" not in texts  # only the logo
+    assert home.downloads_button.parent() is home.side_bar
+    assert home.side_bar.logo.iconSize().width() == 48  # larger than the old 36 px header logo
+
+
+def test_collapsed_side_bar_shows_short_labels(home):
+    home.side_bar.set_expanded(False, animate=False)
+    assert home.downloads_button.text() == "D" and home.sign_out_button.text() == "S"
+    assert home.profile.name.isHidden()
+    home.side_bar.set_expanded(True, animate=False)
+    assert home.downloads_button.text() == "Downloads" and not home.profile.name.isHidden()
+
+
+def test_clicking_the_user_opens_the_account_page(home):
+    home.profile.clicked.emit()
 
     assert home.current_page() is not home.dashboard
-    assert home.account_button.isHidden()
     assert not home.dashboard_button.isHidden()
 
 

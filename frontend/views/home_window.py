@@ -1,18 +1,21 @@
 """Window shown after signing in.
 
-A header (logo, navigation, the signed-in user and "Sign out") over four pages:
-the dashboard (start page), the query-input workspace, downloads and the account card.
+A side bar on the left (logo, navigation, the signed-in user and "Sign out") next to
+four pages: the dashboard (start page), the query-input workspace, downloads and the
+account card. Clicking the logo slides the side bar open or closed; clicking the user
+opens the account card.
 """
 
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -27,6 +30,52 @@ from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.views.user_admin_view import UserAdminDialog
+from frontend.widgets.side_bar import LOGO_SIZE, SideBar
+
+
+class ProfileButton(QFrame):
+    """The signed-in user at the bottom of the side bar: avatar, plus name and role when expanded."""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("ProfileButton")
+        self.setStyleSheet(
+            f"#ProfileButton {{ border-radius: 8px; }} #ProfileButton:hover {{ background: {theme.FOAM}; }}"
+        )
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Your account")
+        self.avatar = Avatar(38)
+        self.name = QLabel()
+        self.name.setStyleSheet(f"color: {theme.INK}; font-weight: 600;")
+        self.role = QLabel(objectName="Muted")
+        for label in (self.name, self.role):  # clipped, not holding the bar open, while it slides
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        who = QVBoxLayout()
+        who.setSpacing(0)
+        who.addWidget(self.name)
+        who.addWidget(self.role)
+        self._row = QHBoxLayout(self)
+        self._row.setContentsMargins(6, 6, 6, 6)
+        self._row.setSpacing(10)
+        self._row.addWidget(self.avatar)
+        self._row.addLayout(who, 1)
+
+    def set_user(self, user: UserDTO) -> None:
+        self.avatar.set_user(user)
+        self.name.setText(user.full_name)
+        self.role.setText("Administrator" if user.is_admin else "User")
+
+    def set_compact(self, compact: bool) -> None:
+        self.name.setVisible(not compact)
+        self.role.setVisible(not compact)
+        self._row.setAlignment(self.avatar, Qt.AlignmentFlag.AlignHCenter if compact else Qt.AlignmentFlag.AlignLeft)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt API)
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 class HomeWindow(QMainWindow):
@@ -38,56 +87,16 @@ class HomeWindow(QMainWindow):
         self.setWindowTitle("GEE-Assist")
         self.setMinimumSize(1000, 680)
 
-        # ---- header
-        logo = QLabel()
-        logo.setPixmap(round_logo(36, self.devicePixelRatioF()))
-        name = QLabel("GEE-Assist")
-        name.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 15pt; color: {theme.INK};")
-        self.user_avatar = Avatar(34)
-        self.user_name = QLabel()
-        self.user_name.setStyleSheet(f"color: {theme.INK}; font-weight: 600;")
-        self.user_role = QLabel(objectName="Muted")
-        who = QVBoxLayout()
-        who.setSpacing(0)
-        who.addWidget(self.user_name)
-        who.addWidget(self.user_role)
-        self.sign_out_button = QPushButton("Sign out", objectName="SecondaryButton")
-        self.sign_out_button.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self.dashboard_button = QPushButton("Dashboard", objectName="SecondaryButton")
-        self.dashboard_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        # ---- side bar
+        self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
+        self.dashboard_button = self.side_bar.add_button("Dashboard", "Db")
         self.dashboard_button.setToolTip("Back to the dashboard")
-        self.downloads_button = QPushButton("Downloads", objectName="SecondaryButton")
-        self.downloads_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.account_button = QPushButton("My account", objectName="SecondaryButton")
-        self.account_button.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self.manage_users = QPushButton("Manage users", objectName="SecondaryButton")
-        self.manage_users.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.downloads_button = self.side_bar.add_button("Downloads", "D")
+        self.manage_users = self.side_bar.add_button("Manage users", "M")
         self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
-        self.header_actions = QHBoxLayout()  # extra buttons go here
-        self.header_actions.setSpacing(10)
-        self.header_actions.addWidget(self.dashboard_button)
-        self.header_actions.addWidget(self.downloads_button)
-        self.header_actions.addWidget(self.account_button)
-        self.header_actions.addWidget(self.manage_users)
-
-        header = QFrame(objectName="HomeHeader")
-        header.setStyleSheet(
-            f"#HomeHeader {{ background: {theme.WHITE}; border-bottom: 1px solid {theme.BORDER}; }}"
-        )
-        bar = QHBoxLayout(header)
-        bar.setContentsMargins(28, 12, 28, 12)
-        bar.setSpacing(12)
-        bar.addWidget(logo)
-        bar.addWidget(name)
-        bar.addStretch(1)
-        bar.addLayout(self.header_actions)
-        bar.addSpacing(8)
-        bar.addWidget(self.user_avatar)
-        bar.addLayout(who)
-        bar.addSpacing(8)
-        bar.addWidget(self.sign_out_button)
+        self.profile = ProfileButton()
+        self.side_bar.add_widget(self.profile, footer=True)
+        self.sign_out_button = self.side_bar.add_button("Sign out", "S", footer=True)
 
         # ---- pages
         self.dashboard = DashboardView()
@@ -126,10 +135,10 @@ class HomeWindow(QMainWindow):
         self._account_page = account_page
 
         root = QWidget()
-        layout = QVBoxLayout(root)
+        layout = QHBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(header)
+        layout.addWidget(self.side_bar)
         layout.addWidget(self.pages, 1)
         self.setCentralWidget(root)
 
@@ -139,7 +148,7 @@ class HomeWindow(QMainWindow):
         )
         self.manage_users.clicked.connect(self._open_user_admin)
         self.dashboard_button.clicked.connect(self.show_dashboard)
-        self.account_button.clicked.connect(self.show_account)
+        self.profile.clicked.connect(self.show_account)
         self.dashboard.open_query_input.connect(self.show_query_input)
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.downloads_button.clicked.connect(self.show_downloads)
@@ -173,7 +182,6 @@ class HomeWindow(QMainWindow):
         self.pages.setCurrentWidget(page)
         self.dashboard_button.setVisible(page is not self.dashboard)
         self.downloads_button.setVisible(page is not self.downloads)
-        self.account_button.setVisible(page is not self._account_page)
 
     def _open_user_admin(self) -> None:
         if self._admin_dialog is None:
@@ -188,9 +196,7 @@ class HomeWindow(QMainWindow):
         self._admin_dialog.activateWindow()
 
     def set_user(self, user: UserDTO) -> None:
-        self.user_avatar.set_user(user)
-        self.user_name.setText(user.full_name)
-        self.user_role.setText("Administrator" if user.is_admin else "User")
+        self.profile.set_user(user)
         self.manage_users.setVisible(user.is_admin)
         self.account.set_user(user)
         self.dashboard.set_user(user)
