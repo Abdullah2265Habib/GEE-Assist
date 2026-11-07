@@ -154,6 +154,14 @@ QScrollBar::handle:vertical {{ background: {BORDER_STRONG}; border-radius: 4px; 
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 """
 
+# Pop-up menus (the account menu, the menu bar's menus).
+MENU_STYLE = f"""
+QMenu {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 8px; padding: 6px; }}
+QMenu::item {{ color: {INK}; padding: 8px 18px; border-radius: 6px; }}
+QMenu::item:selected {{ background: {FOAM}; }}
+QMenu::item:disabled {{ color: {SUBTLE}; }}
+"""
+
 
 def apply_theme(app: QApplication) -> None:
     app.setStyle("Fusion")

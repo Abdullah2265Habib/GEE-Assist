@@ -33,14 +33,6 @@ from frontend.views.main_window import MainWindow
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
 
-MENU_STYLE = f"""
-QMenu {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 8px; padding: 6px; }}
-QMenu::item {{ color: {theme.INK}; padding: 8px 18px; border-radius: 6px; }}
-QMenu::item:selected {{ background: {theme.FOAM}; }}
-QMenu::item:disabled {{ color: {theme.SUBTLE}; }}
-"""
-
-
 class ProfileButton(QFrame):
     """The signed-in user at the bottom of the side bar: avatar, plus name and role when expanded."""
 
@@ -111,7 +103,7 @@ class HomeWindow(QMainWindow):
 
         # ---- account menu
         self.account_menu = QMenu(self)
-        self.account_menu.setStyleSheet(MENU_STYLE)
+        self.account_menu.setStyleSheet(theme.MENU_STYLE)
         self.manage_account_action = QAction("Manage account  (coming soon)", self)
         self.manage_account_action.setEnabled(False)
         self.view_account_action = QAction("View account", self)
