@@ -12,32 +12,33 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
 
+from frontend import palette
+
 # ----------------------------------------------------------------------------- palette
-WHITE = "#FFFFFF"
-INK = "#1E3A3A"            # headings / main text: deep green-slate
-TEXT = "#34504F"
-MUTED = "#6B8582"
-SUBTLE = "#93A9A6"
-BORDER = "#D3E4DF"
-BORDER_STRONG = "#B9D3CC"
-BORDER_HOVER = "#9CC5BA"
-FIELD_BG = "#FBFDFC"
-DISABLED_BG = "#F3F6F5"
-
-LEAF = "#2E9E78"           # primary green
-LEAF_DARK = "#237D60"
-OCEAN = "#2F7FC1"          # primary blue
-OCEAN_DARK = "#24659C"
-MINT = "#EAF6F0"
-SKY = "#E6F1FA"
-FOAM = "#F4FAF8"
-PAGE_BG = "#F2F8F6"        # soft green-blue page behind the white cards
-HEADER_GREEN = "#DFF1E8"   # section header band: light sage-green ...
-HEADER_BLUE = "#DFEDF7"    # ... fading to a light sky-blue
-HEADER_LINE = "#C4E0D5"
-
-ERROR = "#C0392B"
-SUCCESS = "#23845E"
+_P = palette.ACTIVE
+WHITE = _P["WHITE"]
+INK = _P["INK"]
+TEXT = _P["TEXT"]
+MUTED = _P["MUTED"]
+SUBTLE = _P["SUBTLE"]
+BORDER = _P["BORDER"]
+BORDER_STRONG = _P["BORDER_STRONG"]
+BORDER_HOVER = _P["BORDER_HOVER"]
+FIELD_BG = _P["FIELD_BG"]
+DISABLED_BG = _P["DISABLED_BG"]
+LEAF = _P["LEAF"]
+LEAF_DARK = _P["LEAF_DARK"]
+OCEAN = _P["OCEAN"]
+OCEAN_DARK = _P["OCEAN_DARK"]
+MINT = _P["MINT"]
+SKY = _P["SKY"]
+FOAM = _P["FOAM"]
+PAGE_BG = _P["PAGE_BG"]
+HEADER_GREEN = _P["HEADER_GREEN"]
+HEADER_BLUE = _P["HEADER_BLUE"]
+HEADER_LINE = _P["HEADER_LINE"]
+ERROR = _P["ERROR"]
+SUCCESS = _P["SUCCESS"]
 
 SERIF = "Georgia"
 SANS = "Segoe UI"

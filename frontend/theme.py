@@ -7,29 +7,30 @@ from pathlib import Path
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import QApplication
 
+from frontend import palette
+
 # ----------------------------------------------------------------------------- palette
-WHITE = "#FFFFFF"
-INK = "#1E3A3A"            # headings / main text: deep green-slate
-TEXT = "#34504F"
-MUTED = "#6B8582"
-SUBTLE = "#93A9A6"
-BORDER = "#D3E4DF"
-BORDER_STRONG = "#B9D3CC"
-FIELD_BG = "#FBFDFC"
-
-LEAF = "#2E9E78"           # primary green
-LEAF_DARK = "#237D60"
-OCEAN = "#2F7FC1"          # primary blue
-OCEAN_DARK = "#24659C"
-MINT = "#EAF6F0"
-SKY = "#E6F1FA"
-FOAM = "#F4FAF8"
-
-ERROR = "#C0392B"
-ERROR_BG = "#FDF1EF"
-SUCCESS = "#23845E"
-SUCCESS_BG = "#ECF7F1"
-INFO_BG = "#EEF5FB"
+_P = palette.ACTIVE
+WHITE = _P["WHITE"]
+INK = _P["INK"]
+TEXT = _P["TEXT"]
+MUTED = _P["MUTED"]
+SUBTLE = _P["SUBTLE"]
+BORDER = _P["BORDER"]
+BORDER_STRONG = _P["BORDER_STRONG"]
+FIELD_BG = _P["FIELD_BG"]
+LEAF = _P["LEAF"]
+LEAF_DARK = _P["LEAF_DARK"]
+OCEAN = _P["OCEAN"]
+OCEAN_DARK = _P["OCEAN_DARK"]
+MINT = _P["MINT"]
+SKY = _P["SKY"]
+FOAM = _P["FOAM"]
+ERROR = _P["ERROR"]
+ERROR_BG = _P["ERROR_BG"]
+SUCCESS = _P["SUCCESS"]
+SUCCESS_BG = _P["SUCCESS_BG"]
+INFO_BG = _P["INFO_BG"]
 
 SERIF = "Georgia"
 SANS = "Segoe UI"
