@@ -238,3 +238,37 @@ def test_view_menu_full_screen_and_back(home, monkeypatch):
     home.menu_bar.full_screen.trigger()
     assert calls == ["showFullScreen", "showMaximized"]  # back to how it was
     assert not home.menu_bar.full_screen.isChecked()
+
+
+def test_options_menu_opens_the_chunk_size_setting(home, monkeypatch):
+    from frontend.views import download_view
+
+    asked = []
+    monkeypatch.setattr(download_view.QInputDialog, "getInt", lambda *a, **k: asked.append(a[1]) or (500, False))
+    home.menu_bar.chunk_size.trigger()
+    assert asked == ["Chunk size"]  # the same dialog as the Downloads page's "Change…"
+
+
+def test_manage_users_is_in_the_options_menu_for_administrators_only(home, monkeypatch):
+    assert not home.menu_bar.manage_users.isVisible()  # a user
+    home.set_user(_user("admin"))
+    assert home.menu_bar.manage_users.isVisible()
+
+    class FakeAdminDialog:
+        opened = 0
+
+        def __init__(self, facade, parent):
+            self.session_expired = MagicMock()
+
+        def show(self):
+            FakeAdminDialog.opened += 1
+
+        def raise_(self):
+            pass
+
+        def activateWindow(self):  # noqa: N802 (Qt API)
+            pass
+
+    monkeypatch.setattr(home_window, "UserAdminDialog", FakeAdminDialog)
+    home.menu_bar.manage_users.trigger()
+    assert FakeAdminDialog.opened == 1

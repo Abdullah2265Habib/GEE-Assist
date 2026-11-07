@@ -246,6 +246,8 @@ class HomeWindow(QMainWindow):
         bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
         self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
         bar.full_screen.triggered.connect(self.set_full_screen)
+        bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
+        bar.manage_users.triggered.connect(self.open_user_admin)
 
     def open_user_admin(self) -> None:
         if self._admin_dialog is None:
@@ -263,5 +265,6 @@ class HomeWindow(QMainWindow):
         self._user = user
         self.profile.set_user(user)
         self.manage_users.setVisible(user.is_admin)
+        self.menu_bar.manage_users.setVisible(user.is_admin)
         self.account.set_user(user)
         self.dashboard.set_user(user)
