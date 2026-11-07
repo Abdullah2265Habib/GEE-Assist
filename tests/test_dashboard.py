@@ -51,7 +51,7 @@ def home(app, monkeypatch):
 def test_opens_on_the_dashboard_with_a_greeting(home):
     assert home.current_page() is home.dashboard
     assert home.dashboard.greeting.text() == "Welcome, Ayesha"
-    assert home.dashboard_button.isHidden()
+    assert home.back_button.isHidden()
     assert not home.side_bar.is_expanded() and home.downloads_button.text() == "D"  # side bar starts collapsed
 
 
@@ -59,14 +59,20 @@ def test_query_input_button_opens_the_parameter_form(home):
     home.dashboard.query_tile.button.click()
 
     assert isinstance(home.current_page(), StubQueryWorkspace)
-    assert not home.dashboard_button.isHidden()
+    assert not home.back_button.isHidden()
 
 
-def test_dashboard_button_returns_to_the_dashboard(home):
+def test_back_button_returns_from_query_input(home):
     home.show_query_input()
-    home.dashboard_button.click()
+    home.back_button.click()
 
     assert home.current_page() is home.dashboard
+
+
+def test_there_is_no_separate_dashboard_item(home):
+    home.show_downloads()
+    names = [button.text() for button in home.side_bar.findChildren(QPushButton) if button.isVisibleTo(home)]
+    assert "Dashboard" not in names and "Db" not in names
 
 
 def test_back_button_returns_to_the_dashboard(home):
@@ -126,7 +132,7 @@ def test_view_account_opens_the_account_page(home):
     home.view_account_action.trigger()
 
     assert home.current_page() is not home.dashboard
-    assert not home.dashboard_button.isHidden()
+    assert not home.back_button.isHidden()
 
 
 def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
@@ -150,7 +156,7 @@ def test_download_card_opens_the_downloads_page(home):
     home.dashboard.download_tile.button.click()
 
     assert home.current_page() is home.downloads
-    assert home.downloads_button.isHidden() and not home.dashboard_button.isHidden()
+    assert home.downloads_button.isHidden() and not home.back_button.isHidden()
 
 
 def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, monkeypatch):

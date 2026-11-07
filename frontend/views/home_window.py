@@ -103,8 +103,6 @@ class HomeWindow(QMainWindow):
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
         self.back_button = self.side_bar.back_button
         self.back_button.setToolTip("Back to the dashboard")
-        self.dashboard_button = self.side_bar.add_button("Dashboard", "Db")
-        self.dashboard_button.setToolTip("Back to the dashboard")
         self.downloads_button = self.side_bar.add_button("Downloads", "D")
         self.manage_users = self.side_bar.add_button("Manage users", "M")
         self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
@@ -173,7 +171,6 @@ class HomeWindow(QMainWindow):
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
         self.manage_users.clicked.connect(self._open_user_admin)
-        self.dashboard_button.clicked.connect(self.show_dashboard)
         self.back_button.clicked.connect(self.show_dashboard)
         self.profile.clicked.connect(self.show_account_menu)
         self.view_account_action.triggered.connect(self.show_account)
@@ -209,7 +206,6 @@ class HomeWindow(QMainWindow):
 
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
-        self.dashboard_button.setVisible(page is not self.dashboard)
         self.back_button.setVisible(page is not self.dashboard)  # nowhere to go back to on the dashboard
         self.downloads_button.setVisible(page is not self.downloads)
 
