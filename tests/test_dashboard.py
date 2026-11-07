@@ -83,9 +83,16 @@ def test_back_button_returns_to_the_dashboard(home):
     assert home.current_page() is home.dashboard and home.back_button.isHidden()
 
 
-def test_dashboard_has_no_home_icon(home):
-    assert home.back_button.isHidden()
+def test_dashboard_has_the_logo_at_the_top_and_no_home_icon(home):
+    home.show()
+    QApplication.processEvents()
+    top_margin = home.side_bar.layout().contentsMargins().top()
+    assert home.back_button.isHidden() and home.side_bar.logo.y() == top_margin
     assert "⌂" not in [label.text() for label in home.side_bar.findChildren(QLabel)]
+
+    home.show_downloads()
+    QApplication.processEvents()
+    assert not home.back_button.isHidden() and home.side_bar.logo.y() > top_margin  # back button above it
 
 
 def test_navigation_is_in_a_side_bar_without_the_app_name(home):

@@ -171,15 +171,16 @@ def test_back_button_is_a_circle_centred_above_the_logo(bar):
     assert abs(back.center().x() - logo.center().x()) <= 1
 
 
-def test_hidden_back_button_keeps_its_place(bar):
+def test_logo_moves_to_the_top_without_the_back_button(bar):
     bar.show()
     QApplication.processEvents()
-    logo_top = bar.logo.y()
+    top_margin = bar.layout().contentsMargins().top()
+    assert bar.logo.y() > top_margin  # below the back button
 
     bar.show_back(False)
     QApplication.processEvents()
-    assert bar.back_button.isHidden()
-    assert bar.logo.y() == logo_top  # the logo does not jump between pages
+    assert bar.back_button.isHidden() and bar.logo.y() == top_margin
 
     bar.show_back(True)
-    assert not bar.back_button.isHidden()
+    QApplication.processEvents()
+    assert not bar.back_button.isHidden() and bar.logo.y() > top_margin

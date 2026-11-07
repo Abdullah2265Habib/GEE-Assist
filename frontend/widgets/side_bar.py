@@ -4,6 +4,7 @@ The bar slides between two widths when its logo is clicked. Expanded, its button
 show their full names ("Downloads"); collapsed, only a short label ("D"). It starts
 collapsed unless created with ``expanded=True``. A round back button sits above
 the logo; the bar's owner decides where it leads and, with ``show_back``, when it shows.
+Without it, the logo moves up to the top of the bar.
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
@@ -108,9 +109,6 @@ class SideBar(QFrame):
         self.back_button.setToolTip("Back")
         self.back_button.setFixedSize(BUTTON_HEIGHT, BUTTON_HEIGHT)
         self.back_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        policy = self.back_button.sizePolicy()
-        policy.setRetainSizeWhenHidden(True)  # hidden, it keeps its place: the logo does not jump
-        self.back_button.setSizePolicy(policy)
         back_row = QHBoxLayout()  # centred above the logo, like the circles below it
         back_row.setContentsMargins((LOGO_SIZE - BUTTON_HEIGHT) // 2, 0, 0, 0)
         back_row.addWidget(self.back_button)
