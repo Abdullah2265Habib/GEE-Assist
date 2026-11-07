@@ -37,7 +37,8 @@ Run the tests with `python -m pytest`.
   lasts `SESSION_DURATION` from `.env` (e.g. `7d`, `12h`, `2m`), counted from signing in; after that
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
-  form (with the "Chat with Gemini" assistant); **Dashboard** in the side bar returns to it.
+  form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
+  returns to it.
 - Navigation is in a side bar on the left. It starts collapsed (short labels, e.g. "D");
   clicking the logo slides it open (full names, e.g. "Downloads") or closed again.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
