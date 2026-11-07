@@ -79,9 +79,18 @@ def test_navigation_is_in_a_side_bar_without_the_app_name(home):
 def test_collapsed_side_bar_shows_short_labels(home):
     home.side_bar.set_expanded(False, animate=False)
     assert home.downloads_button.text() == "D"
-    assert home.profile.name.isHidden()
+    assert home.profile.details.isHidden()
     home.side_bar.set_expanded(True, animate=False)
-    assert home.downloads_button.text() == "Downloads" and not home.profile.name.isHidden()
+    assert home.downloads_button.text() == "Downloads" and not home.profile.details.isHidden()
+
+
+def test_collapsed_avatar_is_centred_under_the_logo(home):
+    home.show()
+    QApplication.processEvents()
+    bar = home.side_bar
+    avatar_centre = home.profile.avatar.mapTo(bar, home.profile.avatar.rect().center()).x()
+    logo_centre = bar.logo.geometry().center().x()
+    assert abs(avatar_centre - logo_centre) <= 1
 
 
 def test_profile_menu_offers_the_account_options(home, monkeypatch):

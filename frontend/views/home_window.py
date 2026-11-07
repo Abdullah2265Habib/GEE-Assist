@@ -60,7 +60,11 @@ class ProfileButton(QFrame):
         self.role = QLabel(objectName="Muted")
         for label in (self.name, self.role):  # clipped, not holding the bar open, while it slides
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        who = QVBoxLayout()
+        # Name and role in one widget: hidden, it takes no room, so the avatar can centre.
+        self.details = QWidget()
+        self.details.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        who = QVBoxLayout(self.details)
+        who.setContentsMargins(0, 0, 0, 0)
         who.setSpacing(0)
         who.addWidget(self.name)
         who.addWidget(self.role)
@@ -68,7 +72,7 @@ class ProfileButton(QFrame):
         self._row.setContentsMargins(6, 6, 6, 6)
         self._row.setSpacing(10)
         self._row.addWidget(self.avatar)
-        self._row.addLayout(who, 1)
+        self._row.addWidget(self.details, 1)
 
     def set_user(self, user: UserDTO) -> None:
         self.avatar.set_user(user)
@@ -76,8 +80,7 @@ class ProfileButton(QFrame):
         self.role.setText("Administrator" if user.is_admin else "User")
 
     def set_compact(self, compact: bool) -> None:
-        self.name.setVisible(not compact)
-        self.role.setVisible(not compact)
+        self.details.setVisible(not compact)
         self._row.setAlignment(self.avatar, Qt.AlignmentFlag.AlignHCenter if compact else Qt.AlignmentFlag.AlignLeft)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt API)
