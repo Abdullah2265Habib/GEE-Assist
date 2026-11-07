@@ -39,6 +39,13 @@ Run the tests with `python -m pytest`.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
   form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
   returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
+- A menu bar runs along the top of every page, as in Word or Excel:
+  - **File**: New request (Ctrl+N), Sign out, Exit (Ctrl+Q)
+  - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
+  - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
+    Full screen (F11)
+  - **Options**: Download chunk size…, Manage users… (administrators)
+  - **Help**: About GEE-Assist
 - Navigation is in a side bar on the left. It starts collapsed (short labels, e.g. "D");
   clicking the logo slides it open (full names, e.g. "Downloads") or closed again.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
@@ -93,6 +100,7 @@ How it works:
 | Admin user management | `frontend/views/user_admin_view.py` |
 | Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
 | Side bar | `frontend/widgets/side_bar.py` |
+| Menu bar | `frontend/widgets/menu_bar.py` |
 | Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
