@@ -38,8 +38,8 @@ Run the tests with `python -m pytest`.
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
   form (with the "Chat with Gemini" assistant); **Dashboard** in the side bar returns to it.
-- Navigation is in a side bar on the left. Clicking the logo slides it open (full names, e.g.
-  "Downloads") or closed (short labels, e.g. "D").
+- Navigation is in a side bar on the left. It starts collapsed (short labels, e.g. "D");
+  clicking the logo slides it open (full names, e.g. "Downloads") or closed again.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
