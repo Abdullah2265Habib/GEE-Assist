@@ -17,7 +17,8 @@ class StartupWindow(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("GEE-Assist")
         self.setObjectName("StartupWindow")
-        self.setStyleSheet(f"#StartupWindow, #StartupStack {{ background: {theme.SPLASH_BG}; }}")
+        # The theme's surface: the sign-in screen fades in over it. (The intro paints its own white.)
+        self.setStyleSheet(f"#StartupWindow, #StartupStack {{ background: {theme.WHITE}; }}")
         self.setMinimumSize(1000, 680)
 
         self._stack = QStackedWidget(self)
