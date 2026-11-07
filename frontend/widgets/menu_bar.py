@@ -1,14 +1,15 @@
 """Menu bar along the top of the signed-in window, like the classic one in Word or Excel.
 
 File, Edit, View, Options and Help, each with keyboard shortcuts shown next to its
-items. The menu bar only holds the actions; the window it belongs to decides what
-they do (see ``HomeWindow``).
+items. The Edit commands act on the text field that has the cursor, as in Word;
+items that cannot apply are greyed out while the menu is open. The other actions
+are given their meaning by the window the menu bar belongs to (see ``HomeWindow``).
 """
 
 from __future__ import annotations
 
 from PyQt6.QtGui import QAction, QKeySequence
-from PyQt6.QtWidgets import QMenu, QMenuBar, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QLineEdit, QMenu, QMenuBar, QPlainTextEdit, QTextEdit, QWidget
 
 from frontend import theme
 
@@ -43,6 +44,14 @@ class AppMenuBar(QMenuBar):
         self.paste = self._action(self.edit_menu, "&Paste", QKeySequence.StandardKey.Paste)
         self.edit_menu.addSeparator()
         self.select_all = self._action(self.edit_menu, "Select &all", QKeySequence.StandardKey.SelectAll)
+        self._edit_commands = {
+            self.undo: "undo", self.redo: "redo", self.cut: "cut",
+            self.copy: "copy", self.paste: "paste", self.select_all: "selectAll",
+        }
+        for action, command in self._edit_commands.items():
+            action.triggered.connect(lambda _=False, command=command: self._run_edit(command))
+        self.edit_menu.aboutToShow.connect(self._update_edit_items)
+        self.edit_menu.aboutToHide.connect(self._enable_edit_items)  # shortcuts keep working afterwards
 
         self.view_menu = self._menu("&View")
         self.view_dashboard = self._action(self.view_menu, "&Dashboard", "Ctrl+1")
@@ -59,6 +68,47 @@ class AppMenuBar(QMenuBar):
 
         self.help_menu = self._menu("&Help")
         self.about = self._action(self.help_menu, "&About GEE-Assist")
+
+    # ------------------------------------------------------------- Edit
+    @staticmethod
+    def edit_target() -> QWidget | None:
+        """The text field the Edit commands apply to: the one with the cursor, if any."""
+        widget = QApplication.focusWidget()
+        if isinstance(widget, QComboBox) and widget.isEditable():
+            widget = widget.lineEdit()
+        return widget if isinstance(widget, (QLineEdit, QTextEdit, QPlainTextEdit)) else None
+
+    def _run_edit(self, command: str) -> None:
+        target = self.edit_target()
+        if target is not None:
+            getattr(target, command)()
+
+    def _update_edit_items(self) -> None:
+        target = self.edit_target()
+        if target is None:
+            for action in self._edit_commands:
+                action.setEnabled(False)
+            return
+        writable = not target.isReadOnly()
+        if isinstance(target, QLineEdit):
+            selected = target.hasSelectedText()
+            can_undo, can_redo = target.isUndoAvailable(), target.isRedoAvailable()
+            can_paste = bool(QApplication.clipboard().text())
+        else:
+            selected = target.textCursor().hasSelection()
+            document = target.document()
+            can_undo, can_redo = document.isUndoAvailable(), document.isRedoAvailable()
+            can_paste = target.canPaste()
+        self.undo.setEnabled(writable and can_undo)
+        self.redo.setEnabled(writable and can_redo)
+        self.cut.setEnabled(writable and selected)
+        self.copy.setEnabled(selected)
+        self.paste.setEnabled(writable and can_paste)
+        self.select_all.setEnabled(True)
+
+    def _enable_edit_items(self) -> None:
+        for action in self._edit_commands:
+            action.setEnabled(True)
 
     def _menu(self, title: str) -> QMenu:
         menu = self.addMenu(title)

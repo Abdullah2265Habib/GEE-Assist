@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
-from PyQt6.QtWidgets import QApplication  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QLineEdit, QPushButton, QVBoxLayout, QWidget  # noqa: E402
 
 from frontend.widgets.menu_bar import AppMenuBar  # noqa: E402
 
@@ -53,3 +53,52 @@ def test_shortcuts_are_the_familiar_ones(bar):
 def test_side_bar_and_full_screen_are_on_off_items(bar):
     assert bar.toggle_side_bar.isCheckable() and bar.full_screen.isCheckable()
     assert not bar.view_dashboard.isCheckable()
+
+
+@pytest.fixture
+def form(app):
+    """A window with a text field and a button, the field holding the cursor."""
+    window = QWidget()
+    field, button = QLineEdit("Faisalabad AOI"), QPushButton("Go")
+    layout = QVBoxLayout(window)
+    layout.addWidget(field)
+    layout.addWidget(button)
+    window.show()
+    window.activateWindow()
+    field.setFocus()
+    QApplication.processEvents()
+    if QApplication.focusWidget() is not field:
+        pytest.skip("this platform does not give the test window keyboard focus")
+    yield field, button
+    window.close()
+    window.deleteLater()
+
+
+def test_edit_commands_act_on_the_field_with_the_cursor(bar, form):
+    field, _ = form
+    bar.select_all.trigger()
+    assert field.selectedText() == "Faisalabad AOI"
+    bar.copy.trigger()
+    assert QApplication.clipboard().text() == "Faisalabad AOI"
+    bar.cut.trigger()
+    assert field.text() == ""
+    bar.undo.trigger()
+    assert field.text() == "Faisalabad AOI"
+    field.setCursorPosition(len(field.text()))
+    bar.paste.trigger()
+    assert field.text() == "Faisalabad AOIFaisalabad AOI"
+
+
+def test_edit_items_are_greyed_out_when_they_cannot_apply(bar, form):
+    field, button = form
+    field.deselect()
+    bar._update_edit_items()  # as when the Edit menu opens
+    assert not bar.copy.isEnabled() and not bar.cut.isEnabled() and bar.select_all.isEnabled()
+
+    button.setFocus()
+    QApplication.processEvents()
+    bar._update_edit_items()  # no text field has the cursor
+    assert not any(action.isEnabled() for action in (bar.undo, bar.copy, bar.paste, bar.select_all))
+
+    bar._enable_edit_items()  # as when the menu closes
+    assert bar.copy.isEnabled()
