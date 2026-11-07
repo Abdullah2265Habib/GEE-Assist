@@ -69,6 +69,15 @@ def test_dashboard_button_returns_to_the_dashboard(home):
     assert home.current_page() is home.dashboard
 
 
+def test_back_button_returns_to_the_dashboard(home):
+    assert home.back_button.isHidden()  # already on the dashboard
+    home.show_downloads()
+    assert not home.back_button.isHidden()
+
+    home.back_button.click()
+    assert home.current_page() is home.dashboard and home.back_button.isHidden()
+
+
 def test_navigation_is_in_a_side_bar_without_the_app_name(home):
     texts = [label.text() for label in home.findChildren(QLabel)]
     assert "GEE-Assist" not in texts  # only the logo

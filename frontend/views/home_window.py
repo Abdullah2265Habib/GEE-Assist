@@ -101,6 +101,8 @@ class HomeWindow(QMainWindow):
 
         # ---- side bar
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
+        self.back_button = self.side_bar.back_button
+        self.back_button.setToolTip("Back to the dashboard")
         self.dashboard_button = self.side_bar.add_button("Dashboard", "Db")
         self.dashboard_button.setToolTip("Back to the dashboard")
         self.downloads_button = self.side_bar.add_button("Downloads", "D")
@@ -172,6 +174,7 @@ class HomeWindow(QMainWindow):
         )
         self.manage_users.clicked.connect(self._open_user_admin)
         self.dashboard_button.clicked.connect(self.show_dashboard)
+        self.back_button.clicked.connect(self.show_dashboard)
         self.profile.clicked.connect(self.show_account_menu)
         self.view_account_action.triggered.connect(self.show_account)
         self.signup_details_action.triggered.connect(self.show_signup_details)
@@ -207,6 +210,7 @@ class HomeWindow(QMainWindow):
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
         self.dashboard_button.setVisible(page is not self.dashboard)
+        self.back_button.setVisible(page is not self.dashboard)  # nowhere to go back to on the dashboard
         self.downloads_button.setVisible(page is not self.downloads)
 
     # ------------------------------------------------------------- account
