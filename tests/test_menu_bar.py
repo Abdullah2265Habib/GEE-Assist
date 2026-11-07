@@ -36,7 +36,7 @@ def test_menus_hold_the_expected_items(bar):
     assert _items(bar.file_menu) == ["&New request", "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "&Side bar",
-                                     "&Full screen"]
+                                     "&Full screen", "&Theme"]
     assert _items(bar.options_menu) == ["Download &chunk size…", "&Manage users…"]
     assert _items(bar.help_menu) == ["&About GEE-Assist"]
 
@@ -102,3 +102,19 @@ def test_edit_items_are_greyed_out_when_they_cannot_apply(bar, form):
 
     bar._enable_edit_items()  # as when the menu closes
     assert bar.copy.isEnabled()
+
+
+def test_view_menu_has_a_theme_switcher_set_to_light(bar):
+    assert _items(bar.theme_menu) == ["Light", "Dark – blue-green", "Dark – grey"]
+    assert [a.isChecked() for a in bar.theme_menu.actions()] == [True, False, False]  # light by default
+
+
+def test_choosing_another_theme_asks_for_it(bar):
+    chosen = []
+    bar.theme_chosen.connect(chosen.append)
+    bar.theme_actions["light"].trigger()        # already in use: nothing to do
+    bar.theme_actions["dark-grey"].trigger()
+    assert chosen == ["dark-grey"]
+
+    bar.show_current_theme()                    # e.g. switching was cancelled
+    assert bar.theme_actions["light"].isChecked() and not bar.theme_actions["dark-grey"].isChecked()

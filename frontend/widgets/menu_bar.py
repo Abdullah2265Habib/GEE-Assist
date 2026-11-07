@@ -8,10 +8,11 @@ are given their meaning by the window the menu bar belongs to (see ``HomeWindow`
 
 from __future__ import annotations
 
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import QApplication, QComboBox, QLineEdit, QMenu, QMenuBar, QPlainTextEdit, QTextEdit, QWidget
 
-from frontend import theme
+from frontend import appearance, palette, theme
 
 STYLESHEET = f"""
 QMenuBar {{
@@ -25,6 +26,8 @@ QMenuBar::item:pressed {{ background: {theme.MINT}; }}
 
 
 class AppMenuBar(QMenuBar):
+    theme_chosen = pyqtSignal(str)  # a theme other than the current one, e.g. "dark-green"
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setStyleSheet(STYLESHEET)
@@ -61,6 +64,17 @@ class AppMenuBar(QMenuBar):
         self.view_menu.addSeparator()
         self.toggle_side_bar = self._action(self.view_menu, "&Side bar", "Ctrl+B", checkable=True)
         self.full_screen = self._action(self.view_menu, "&Full screen", "F11", checkable=True)
+        self.view_menu.addSeparator()
+        self.theme_menu = self.view_menu.addMenu("&Theme")
+        self.theme_menu.setStyleSheet(theme.MENU_STYLE)
+        self.theme_actions: dict[str, QAction] = {}
+        group = QActionGroup(self)  # one theme at a time
+        for name, label in appearance.THEMES.items():
+            action = self._action(self.theme_menu, label, checkable=True)
+            action.setChecked(name == palette.THEME)
+            action.triggered.connect(lambda _=False, name=name: self._choose_theme(name))
+            group.addAction(action)
+            self.theme_actions[name] = action
 
         self.options_menu = self._menu("&Options")
         self.chunk_size = self._action(self.options_menu, "Download &chunk size…")
@@ -68,6 +82,15 @@ class AppMenuBar(QMenuBar):
 
         self.help_menu = self._menu("&Help")
         self.about = self._action(self.help_menu, "&About GEE-Assist")
+
+    # ------------------------------------------------------------- Theme
+    def _choose_theme(self, name: str) -> None:
+        if name != palette.THEME:
+            self.theme_chosen.emit(name)
+
+    def show_current_theme(self) -> None:
+        """Tick the theme in use again (e.g. when switching was cancelled)."""
+        self.theme_actions[palette.THEME].setChecked(True)
 
     # ------------------------------------------------------------- Edit
     @staticmethod
