@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 from frontend import theme
 
 LOGO_SIZE = 64
-SIDE_MARGIN = 12
+SIDE_MARGIN = 6
 BORDER = 1        # the line on the bar's right edge
 COLLAPSED_WIDTH = LOGO_SIZE + 2 * SIDE_MARGIN + BORDER   # just wide enough for the logo
 EXPANDED_WIDTH = 220
