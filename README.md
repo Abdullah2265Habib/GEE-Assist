@@ -29,7 +29,8 @@ Run the tests with `python -m pytest`.
 
 - On the very first start-up the app asks for a theme: **Light** (the default), **Dark – blue-green**
   or **Dark – grey**. Change it later in **View → Theme**; the app restarts to apply it. The choice
-  is kept in `workspace/appearance.json`.
+  is kept in `workspace/appearance.json`. Each theme has its own project icon (window, taskbar and
+  side bar logo) in `assets/project_icon/`.
 - The intro video (`assets/starting_video/start.mp4`) plays centred on a white screen, then fades out.
   Click or press Esc / Space / Enter to skip it.
 - The sign-in screen offers username/password sign-in, sign-up and Google sign-in.
