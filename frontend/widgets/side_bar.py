@@ -2,7 +2,8 @@
 
 The bar slides between two widths when its logo is clicked. Expanded, its buttons
 show their full names ("Downloads"); collapsed, only a short label ("D"). It starts
-collapsed unless created with ``expanded=True``.
+collapsed unless created with ``expanded=True``. A round back button sits above
+the logo; its owner decides where it leads and when it shows.
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
@@ -21,6 +22,7 @@ from PyQt6.QtWidgets import (
     QWIDGETSIZE_MAX,
     QBoxLayout,
     QFrame,
+    QHBoxLayout,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -42,6 +44,12 @@ BUTTON_HEIGHT = 40  # collapsed, a button is as wide as it is high: a circle
 STYLESHEET = f"""
 #SideBar {{ background: {theme.WHITE}; border: none; border-right: {BORDER}px solid {theme.BORDER}; }}
 QToolButton#SideLogo {{ border: none; background: transparent; padding: 0; }}
+QToolButton#SideBack {{
+    border: none; border-radius: {BUTTON_HEIGHT // 2}px; background: transparent;
+    color: {theme.INK}; font-size: 15pt; padding: 0;
+}}
+QToolButton#SideBack:hover {{ background: {theme.FOAM}; }}
+QToolButton#SideBack:pressed {{ background: {theme.MINT}; }}
 QPushButton#SideButton {{
     border: none; border-radius: 8px; background: transparent; color: {theme.INK};
     font-weight: 600; text-align: left; padding: 0 14px;
@@ -95,6 +103,19 @@ class SideBar(QFrame):
         self.logo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.logo.clicked.connect(self.toggle)
 
+        self.back_button = QToolButton(objectName="SideBack")
+        self.back_button.setText("←")
+        self.back_button.setToolTip("Back")
+        self.back_button.setFixedSize(BUTTON_HEIGHT, BUTTON_HEIGHT)
+        self.back_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        policy = self.back_button.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)  # hidden, it keeps its place: the logo does not jump
+        self.back_button.setSizePolicy(policy)
+        back_row = QHBoxLayout()  # centred above the logo, like the circles below it
+        back_row.setContentsMargins((LOGO_SIZE - BUTTON_HEIGHT) // 2, 0, 0, 0)
+        back_row.addWidget(self.back_button)
+        back_row.addStretch(1)
+
         self._items = QVBoxLayout()
         self._items.setSpacing(4)
         self._footer = QVBoxLayout()
@@ -102,6 +123,7 @@ class SideBar(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SIDE_MARGIN, 18, SIDE_MARGIN, 18)
         layout.setSpacing(18)
+        layout.addLayout(back_row)
         layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignLeft)  # stays put while the bar slides
         layout.addLayout(self._items)
         layout.addStretch(1)

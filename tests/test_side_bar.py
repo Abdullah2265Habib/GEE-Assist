@@ -152,3 +152,22 @@ def test_buttons_added_while_collapsed_are_circles_too(bar):
     later = bar.add_button("Downloads", "D")
     QApplication.processEvents()
     assert later.width() == BUTTON_HEIGHT
+
+
+def test_back_button_is_a_circle_centred_above_the_logo(bar):
+    bar.show()
+    QApplication.processEvents()
+    back, logo = bar.back_button.geometry(), bar.logo.geometry()
+
+    assert back.width() == back.height() == BUTTON_HEIGHT
+    assert back.bottom() < logo.top()
+    assert abs(back.center().x() - logo.center().x()) <= 1
+
+
+def test_hidden_back_button_keeps_its_place(bar):
+    bar.show()
+    QApplication.processEvents()
+    logo_top = bar.logo.y()
+    bar.back_button.hide()
+    QApplication.processEvents()
+    assert bar.logo.y() == logo_top  # the logo does not jump between pages
