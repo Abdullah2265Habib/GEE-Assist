@@ -168,7 +168,7 @@ class HomeWindow(QMainWindow):
         self.account.session_expired.connect(
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
-        self.manage_users.clicked.connect(self._open_user_admin)
+        self.manage_users.clicked.connect(self.open_user_admin)
         self.back_button.clicked.connect(self.show_dashboard)
         self.profile.clicked.connect(self.show_account_menu)
         self.view_account_action.triggered.connect(self.show_account)
@@ -247,7 +247,7 @@ class HomeWindow(QMainWindow):
         self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
         bar.full_screen.triggered.connect(self.set_full_screen)
 
-    def _open_user_admin(self) -> None:
+    def open_user_admin(self) -> None:
         if self._admin_dialog is None:
             self._admin_dialog = UserAdminDialog(self._facade, self)
             self._admin_dialog.session_expired.connect(

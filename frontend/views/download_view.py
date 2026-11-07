@@ -172,7 +172,7 @@ class DownloadView(QWidget):
         layout.setSpacing(20)
         layout.addWidget(self.chart, 3)
         layout.addLayout(figures, 2)
-        self.change_chunk.clicked.connect(self._change_chunk_size)
+        self.change_chunk.clicked.connect(self.change_chunk_size)
         return card
 
     def _build_footer(self) -> QFrame:
@@ -257,7 +257,7 @@ class DownloadView(QWidget):
     def _open_job(self, job: DownloadJobDTO) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(job.folder))
 
-    def _change_chunk_size(self) -> None:
+    def change_chunk_size(self) -> None:
         current = self._facade.get_chunk_size_mb()
         size, accepted = QInputDialog.getInt(
             self, "Chunk size", "Chunk size for new downloads (MB):", current, MIN_CHUNK_SIZE_MB, MAX_CHUNK_SIZE_MB, 50,
