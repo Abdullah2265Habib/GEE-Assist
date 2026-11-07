@@ -27,6 +27,9 @@ Run the tests with `python -m pytest`.
 
 ## Start-up and sign-in
 
+- On the very first start-up the app asks for a theme: **Light** (the default), **Dark – blue-green**
+  or **Dark – grey**. Change it later in **View → Theme**; the app restarts to apply it. The choice
+  is kept in `workspace/appearance.json`.
 - The intro video (`assets/starting_video/start.mp4`) plays centred on a white screen, then fades out.
   Click or press Esc / Space / Enter to skip it.
 - The sign-in screen offers username/password sign-in, sign-up and Google sign-in.
@@ -43,7 +46,7 @@ Run the tests with `python -m pytest`.
   - **File**: New request (Ctrl+N), Sign out, Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
-    Full screen (F11)
+    Full screen (F11), Theme
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: About GEE-Assist
 - Navigation is in a side bar on the left. It starts collapsed (short labels, e.g. "D");
@@ -101,6 +104,7 @@ How it works:
 | Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
 | Side bar | `frontend/widgets/side_bar.py` |
 | Menu bar | `frontend/widgets/menu_bar.py` |
+| Themes (colours, saved choice, first-run dialog) | `frontend/palette.py`, `frontend/appearance.py`, `frontend/views/theme_choice_dialog.py` |
 | Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
