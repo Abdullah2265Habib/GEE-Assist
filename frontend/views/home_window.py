@@ -1,7 +1,7 @@
 """Window shown after signing in.
 
-A side bar on the left (logo, navigation and the signed-in user) next to
-four pages: the dashboard (start page), the query-input workspace, downloads and the
+A menu bar along the top (File, Edit, View, Options, Help) over a side bar on the
+left (logo, navigation and the signed-in user) next to four pages: the dashboard (start page), the query-input workspace, downloads and the
 account card. Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QMouseEvent
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -31,6 +32,7 @@ from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.views.user_admin_view import UserAdminDialog
+from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
 
 class ProfileButton(QFrame):
@@ -92,6 +94,10 @@ class HomeWindow(QMainWindow):
         self.setMinimumSize(1000, 680)
 
         # ---- side bar
+        # ---- menu bar (File, Edit, View, ...) above every page
+        self.menu_bar = AppMenuBar(self)
+        self.setMenuBar(self.menu_bar)
+
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
         self.back_button = self.side_bar.back_button
         self.back_button.setToolTip("Back to the dashboard")
@@ -158,7 +164,7 @@ class HomeWindow(QMainWindow):
         layout.addWidget(self.pages, 1)
         self.setCentralWidget(root)
 
-        self.sign_out_action.triggered.connect(lambda: self.signed_out.emit("You have been signed out."))
+        self.sign_out_action.triggered.connect(self.sign_out)
         self.account.session_expired.connect(
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
@@ -171,6 +177,7 @@ class HomeWindow(QMainWindow):
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.query_input.download_requested.connect(self.start_download)
+        self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self.set_user(user)
         self.show_dashboard()
@@ -193,6 +200,12 @@ class HomeWindow(QMainWindow):
     def show_account(self) -> None:
         self._show_page(self._account_page)
 
+    def sign_out(self) -> None:
+        self.signed_out.emit("You have been signed out.")
+
+    def exit_app(self) -> None:
+        QApplication.quit()  # the active download is paused first (see app.py)
+
     def current_page(self) -> QWidget:
         return self.pages.currentWidget()
 
@@ -208,6 +221,16 @@ class HomeWindow(QMainWindow):
 
     def show_signup_details(self) -> None:
         SignupDetailsDialog(self._user, self).exec()
+
+    def _connect_menu_bar(self) -> None:
+        bar = self.menu_bar
+        bar.new_request.triggered.connect(self.show_query_input)
+        bar.sign_out.triggered.connect(self.sign_out)
+        bar.exit.triggered.connect(self.exit_app)
+        bar.view_dashboard.triggered.connect(self.show_dashboard)
+        bar.view_query_input.triggered.connect(self.show_query_input)
+        bar.view_downloads.triggered.connect(self.show_downloads)
+        bar.view_account.triggered.connect(self.show_account)
 
     def _open_user_admin(self) -> None:
         if self._admin_dialog is None:

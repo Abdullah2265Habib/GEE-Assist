@@ -179,3 +179,38 @@ def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, 
 
     assert started == [form]
     assert home.current_page() is home.downloads
+
+
+# ------------------------------------------------------------------ menu bar
+def test_menu_bar_is_above_every_page(home):
+    assert home.menuBar() is home.menu_bar
+    for show in (home.show_dashboard, home.show_query_input, home.show_downloads, home.show_account):
+        show()
+        assert home.menu_bar.isVisibleTo(home)
+
+
+def test_view_menu_switches_pages(home):
+    bar = home.menu_bar
+    bar.view_downloads.trigger()
+    assert home.current_page() is home.downloads
+    bar.view_query_input.trigger()
+    assert isinstance(home.current_page(), StubQueryWorkspace)
+    bar.view_account.trigger()
+    assert home.current_page() is home._account_page
+    bar.view_dashboard.trigger()
+    assert home.current_page() is home.dashboard
+
+
+def test_file_menu_new_request_sign_out_and_exit(home, monkeypatch):
+    home.menu_bar.new_request.trigger()
+    assert isinstance(home.current_page(), StubQueryWorkspace)
+
+    messages = []
+    home.signed_out.connect(messages.append)
+    home.menu_bar.sign_out.trigger()
+    assert messages == ["You have been signed out."]
+
+    quits = []
+    monkeypatch.setattr(home_window.QApplication, "quit", lambda: quits.append(True))
+    home.menu_bar.exit.trigger()
+    assert quits == [True]
