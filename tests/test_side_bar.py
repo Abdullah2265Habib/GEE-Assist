@@ -193,6 +193,7 @@ def test_button_with_an_icon_shows_only_the_icon_when_collapsed(bar):
     assert downloads.text() == "" and downloads.toolTip() == "Downloads"  # starts collapsed
     bar.set_expanded(True, animate=False)
     assert downloads.text() == "Downloads"  # the icon stands before the name
+    assert downloads.property("hasIcon") is True  # styled with room for the icon
 
 
 def test_icon_is_animated_only_while_hovered(bar):

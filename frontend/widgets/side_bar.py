@@ -58,7 +58,7 @@ QPushButton#SideButton {{
     border: none; border-radius: 8px; background: transparent; color: {theme.INK};
     font-weight: 600; text-align: left; padding: 0 14px;
 }}
-QPushButton#SideButton[icon="true"] {{ padding-left: {ICON_LEFT + ICON_SIZE + 10}px; }}
+QPushButton#SideButton[hasIcon="true"] {{ padding-left: {ICON_LEFT + ICON_SIZE + 10}px; }}
 QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; border-radius: {BUTTON_HEIGHT // 2}px; }}
 QPushButton#SideButton:hover {{ background: {theme.FOAM}; }}
 QPushButton#SideButton:pressed {{ background: {theme.MINT}; }}
@@ -81,7 +81,7 @@ class SideButton(QPushButton):
         self._frames.setInterval(FRAME_MS)
         self._frames.timeout.connect(self.update)
         self._clock = QElapsedTimer()
-        self.setProperty("icon", icon is not None)
+        self.setProperty("hasIcon", icon is not None)  # not "icon": buttons have that already
         self.setObjectName("SideButton")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(text)
