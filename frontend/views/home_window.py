@@ -179,6 +179,7 @@ class HomeWindow(QMainWindow):
         self.query_input.download_requested.connect(self.start_download)
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
+        self._was_maximized = False  # before going full screen
         self.set_user(user)
         self.show_dashboard()
 
@@ -206,6 +207,16 @@ class HomeWindow(QMainWindow):
     def exit_app(self) -> None:
         QApplication.quit()  # the active download is paused first (see app.py)
 
+    def set_full_screen(self, on: bool) -> None:
+        if on:
+            self._was_maximized = self.isMaximized()
+            self.showFullScreen()
+        elif self._was_maximized:
+            self.showMaximized()
+        else:
+            self.showNormal()
+        self.menu_bar.full_screen.setChecked(on)
+
     def current_page(self) -> QWidget:
         return self.pages.currentWidget()
 
@@ -231,6 +242,10 @@ class HomeWindow(QMainWindow):
         bar.view_query_input.triggered.connect(self.show_query_input)
         bar.view_downloads.triggered.connect(self.show_downloads)
         bar.view_account.triggered.connect(self.show_account)
+        bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
+        bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
+        self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
+        bar.full_screen.triggered.connect(self.set_full_screen)
 
     def _open_user_admin(self) -> None:
         if self._admin_dialog is None:

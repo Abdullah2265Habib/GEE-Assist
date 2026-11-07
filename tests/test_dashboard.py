@@ -214,3 +214,27 @@ def test_file_menu_new_request_sign_out_and_exit(home, monkeypatch):
     monkeypatch.setattr(home_window.QApplication, "quit", lambda: quits.append(True))
     home.menu_bar.exit.trigger()
     assert quits == [True]
+
+
+def test_view_menu_toggles_the_side_bar(home):
+    item = home.menu_bar.toggle_side_bar
+    assert not item.isChecked()  # the side bar starts collapsed
+
+    item.trigger()
+    assert home.side_bar.is_expanded() and item.isChecked()
+
+    home.side_bar.set_expanded(False, animate=False)  # e.g. by clicking the logo
+    assert not item.isChecked()
+
+
+def test_view_menu_full_screen_and_back(home, monkeypatch):
+    calls = []
+    for name in ("showFullScreen", "showMaximized", "showNormal"):
+        monkeypatch.setattr(home, name, lambda name=name: calls.append(name))
+    monkeypatch.setattr(home, "isMaximized", lambda: True)
+
+    home.menu_bar.full_screen.trigger()
+    assert calls == ["showFullScreen"] and home.menu_bar.full_screen.isChecked()
+    home.menu_bar.full_screen.trigger()
+    assert calls == ["showFullScreen", "showMaximized"]  # back to how it was
+    assert not home.menu_bar.full_screen.isChecked()
