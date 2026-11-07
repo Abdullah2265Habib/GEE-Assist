@@ -17,8 +17,8 @@ stopped after its window closes, which would freeze the bar half-way.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEasingCurve, QElapsedTimer, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtCore import QEasingCurve, QElapsedTimer, QRectF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QWIDGETSIZE_MAX,
     QBoxLayout,
@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 )
 
 from frontend import theme
+from frontend.widgets.side_icons import SideIcon
 
 LOGO_SIZE = 64
 SIDE_MARGIN = 6
@@ -41,6 +42,8 @@ EXPANDED_WIDTH = 220
 SLIDE_MS = 220
 FRAME_MS = 15     # about 60 frames a second
 BUTTON_HEIGHT = 40  # collapsed, a button is as wide as it is high: a circle
+ICON_SIZE = 22
+ICON_LEFT = 14      # expanded: the icon's distance from the button's left edge
 
 STYLESHEET = f"""
 #SideBar {{ background: {theme.WHITE}; border: none; border-right: {BORDER}px solid {theme.BORDER}; }}
@@ -55,6 +58,7 @@ QPushButton#SideButton {{
     border: none; border-radius: 8px; background: transparent; color: {theme.INK};
     font-weight: 600; text-align: left; padding: 0 14px;
 }}
+QPushButton#SideButton[icon="true"] {{ padding-left: {ICON_LEFT + ICON_SIZE + 10}px; }}
 QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; border-radius: {BUTTON_HEIGHT // 2}px; }}
 QPushButton#SideButton:hover {{ background: {theme.FOAM}; }}
 QPushButton#SideButton:pressed {{ background: {theme.MINT}; }}
@@ -62,11 +66,22 @@ QPushButton#SideButton:pressed {{ background: {theme.MINT}; }}
 
 
 class SideButton(QPushButton):
-    """A navigation button: its full name when the bar is expanded, a short label when collapsed."""
+    """A navigation button: its full name when the bar is expanded, a short label when collapsed.
 
-    def __init__(self, text: str, short: str, parent: QWidget | None = None):
+    With an ``icon``, the icon stands before the name, and collapsed it replaces the
+    short label. The icon is animated only while the pointer is over the button.
+    """
+
+    def __init__(self, text: str, short: str, icon: SideIcon | None = None, parent: QWidget | None = None):
         super().__init__(text, parent)
         self.full_text, self.short_text = text, short
+        self.icon_drawing = icon
+        self._compact = False
+        self._frames = QTimer(self)  # repaints while hovered; a plain timer, like the slide
+        self._frames.setInterval(FRAME_MS)
+        self._frames.timeout.connect(self.update)
+        self._clock = QElapsedTimer()
+        self.setProperty("icon", icon is not None)
         self.setObjectName("SideButton")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(text)
@@ -75,7 +90,9 @@ class SideButton(QPushButton):
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
     def set_compact(self, compact: bool) -> None:
-        self.setText(self.short_text if compact else self.full_text)
+        self._compact = compact
+        short = "" if self.icon_drawing else self.short_text  # the icon is enough when collapsed
+        self.setText(short if compact else self.full_text)
         if compact:
             self.setFixedWidth(BUTTON_HEIGHT)
         else:
@@ -84,6 +101,45 @@ class SideButton(QPushButton):
         self.setProperty("compact", compact)
         self.style().unpolish(self)
         self.style().polish(self)
+
+    # ------------------------------------------------------------- icon animation
+    def is_animating(self) -> bool:
+        return self._frames.isActive()
+
+    def animation_moment(self) -> float | None:
+        """Where the icon's animation is (0 to 1), or None when it is at rest."""
+        if not self.is_animating() or self.icon_drawing is None:
+            return None
+        return (self._clock.elapsed() % self.icon_drawing.period_ms) / self.icon_drawing.period_ms
+
+    def enterEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().enterEvent(event)
+        if self.icon_drawing is not None:
+            self._clock.start()
+            self._frames.start()
+
+    def leaveEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().leaveEvent(event)
+        self._stop_animation()
+
+    def hideEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().hideEvent(event)
+        self._stop_animation()  # hidden while hovered: no leave event comes
+
+    def _stop_animation(self) -> None:
+        if self._frames.isActive():
+            self._frames.stop()
+            self.update()  # back to the icon at rest
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().paintEvent(event)
+        if self.icon_drawing is None:
+            return
+        left = (self.width() - ICON_SIZE) / 2 if self._compact else ICON_LEFT
+        area = QRectF(left, (self.height() - ICON_SIZE) / 2, ICON_SIZE, ICON_SIZE)
+        painter = QPainter(self)
+        self.icon_drawing.paint(painter, area, self.animation_moment())
+        painter.end()
 
 
 class SideBar(QFrame):
@@ -138,8 +194,8 @@ class SideBar(QFrame):
         self._update_logo_tip()
 
     # ------------------------------------------------------------- contents
-    def add_button(self, text: str, short: str, footer: bool = False) -> SideButton:
-        button = SideButton(text, short)
+    def add_button(self, text: str, short: str, footer: bool = False, icon: SideIcon | None = None) -> SideButton:
+        button = SideButton(text, short, icon)
         self.add_widget(button, footer)
         return button
 

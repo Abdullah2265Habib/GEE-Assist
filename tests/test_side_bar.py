@@ -7,7 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
-from PyQt6.QtGui import QPixmap  # noqa: E402
+from PyQt6.QtCore import QEvent, QPointF  # noqa: E402
+from PyQt6.QtGui import QEnterEvent, QPixmap  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QLabel  # noqa: E402
 
@@ -19,6 +20,7 @@ from frontend.widgets.side_bar import (  # noqa: E402
     SLIDE_MS,
     SideBar,
 )
+from frontend.widgets.side_icons import DownloadIcon  # noqa: E402
 
 
 class CompactLabel(QLabel):
@@ -184,3 +186,39 @@ def test_logo_moves_to_the_top_without_the_back_button(bar):
     bar.show_back(True)
     QApplication.processEvents()
     assert not bar.back_button.isHidden() and bar.logo.y() > top_margin
+
+
+def test_button_with_an_icon_shows_only_the_icon_when_collapsed(bar):
+    downloads = bar.add_button("Downloads", "D", icon=DownloadIcon())
+    assert downloads.text() == "" and downloads.toolTip() == "Downloads"  # starts collapsed
+    bar.set_expanded(True, animate=False)
+    assert downloads.text() == "Downloads"  # the icon stands before the name
+
+
+def test_icon_is_animated_only_while_hovered(bar):
+    downloads = bar.add_button("Downloads", "D", icon=DownloadIcon())
+    bar.show()
+    assert not downloads.is_animating() and downloads.animation_moment() is None
+
+    downloads.enterEvent(QEnterEvent(QPointF(5, 5), QPointF(5, 5), QPointF(5, 5)))
+    assert downloads.is_animating()
+    QTest.qWait(120)
+    assert 0 < downloads.animation_moment() < 1
+
+    downloads.leaveEvent(QEvent(QEvent.Type.Leave))
+    assert not downloads.is_animating() and downloads.animation_moment() is None
+
+
+def test_hiding_a_hovered_button_stops_its_animation(bar):
+    downloads = bar.add_button("Downloads", "D", icon=DownloadIcon())
+    bar.show()
+    downloads.enterEvent(QEnterEvent(QPointF(5, 5), QPointF(5, 5), QPointF(5, 5)))
+    downloads.hide()
+    assert not downloads.is_animating()
+
+
+def test_buttons_without_an_icon_never_animate(bar):
+    plain = bar.add_button("Manage users", "M")
+    bar.show()
+    plain.enterEvent(QEnterEvent(QPointF(5, 5), QPointF(5, 5), QPointF(5, 5)))
+    assert not plain.is_animating() and plain.text() == "M"
