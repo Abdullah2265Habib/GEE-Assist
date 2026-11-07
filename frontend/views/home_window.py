@@ -36,6 +36,11 @@ from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
 
+PAGE_BACKGROUND = (
+    "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+    f"stop:0 {theme.PAGE_GRADIENT_TOP}, stop:0.6 {theme.PAGE_GRADIENT_MIDDLE}, stop:1 {theme.PAGE_GRADIENT_BOTTOM})"
+)
+
 class ProfileButton(QFrame):
     """The signed-in user at the bottom of the side bar: avatar, plus name and role when expanded."""
 
@@ -132,10 +137,7 @@ class HomeWindow(QMainWindow):
 
         self.account = AccountView(facade)
         account_page = QFrame(objectName="HomeContent")
-        account_page.setStyleSheet(
-            "#HomeContent { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 #F3FAF6, stop:0.6 #F2F8FB, stop:1 #ECF4FB); }"
-        )
+        account_page.setStyleSheet(f"#HomeContent {{ background: {PAGE_BACKGROUND}; }}")
         centre = QVBoxLayout(account_page)
         centre.addStretch(1)
         row = QHBoxLayout()
@@ -146,10 +148,7 @@ class HomeWindow(QMainWindow):
         centre.addStretch(1)
 
         self.pages = QStackedWidget(objectName="HomePages")
-        self.pages.setStyleSheet(
-            "#HomePages, #DashboardPage { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 #F3FAF6, stop:0.6 #F2F8FB, stop:1 #ECF4FB); }"
-        )
+        self.pages.setStyleSheet(f"#HomePages, #DashboardPage {{ background: {PAGE_BACKGROUND}; }}")
         self.dashboard.setObjectName("DashboardPage")
         self.pages.addWidget(self.dashboard)
         self.pages.addWidget(self.query_input)

@@ -49,11 +49,11 @@ class SpeedChart(QWidget):
         area = QRectF(self.rect()).adjusted(1, 1, -1, -1)
 
         painter.setPen(QPen(QColor(theme.BORDER), 1))
-        painter.setBrush(QColor("#FBFDFC"))
+        painter.setBrush(QColor(theme.FIELD_BG))
         painter.drawRoundedRect(area, 8, 8)
 
         plot = area.adjusted(8, 10, -8, -8)
-        painter.setPen(QPen(QColor("#E3EEEA"), 1, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(QColor(theme.CHART_GRID), 1, Qt.PenStyle.DashLine))
         for step in (0.25, 0.5, 0.75):
             y = plot.top() + plot.height() * step
             painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))

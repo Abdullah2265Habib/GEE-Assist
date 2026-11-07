@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
+from frontend import theme
 from frontend.assets import STARTING_VIDEO
 from frontend.views.splash_view import SplashView
 from frontend.widgets.fade import fade_in
@@ -16,7 +17,7 @@ class StartupWindow(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("GEE-Assist")
         self.setObjectName("StartupWindow")
-        self.setStyleSheet("#StartupWindow, #StartupStack { background: #FFFFFF; }")
+        self.setStyleSheet(f"#StartupWindow, #StartupStack {{ background: {theme.SPLASH_BG}; }}")
         self.setMinimumSize(1000, 680)
 
         self._stack = QStackedWidget(self)

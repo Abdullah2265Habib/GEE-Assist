@@ -112,9 +112,9 @@ class HeroPanel(QFrame):
 
         # Mint (land) to sky (ocean) wash.
         base = QLinearGradient(0, 0, w, h)
-        base.setColorAt(0.0, QColor("#EEF8F2"))
-        base.setColorAt(0.55, QColor("#EAF4F8"))
-        base.setColorAt(1.0, QColor("#E2EEF9"))
+        base.setColorAt(0.0, QColor(theme.HERO_TOP))
+        base.setColorAt(0.55, QColor(theme.HERO_MIDDLE))
+        base.setColorAt(1.0, QColor(theme.HERO_BOTTOM))
         p.fillRect(self.rect(), base)
 
         # Soft glow behind the text.

@@ -31,6 +31,31 @@ ERROR_BG = _P["ERROR_BG"]
 SUCCESS = _P["SUCCESS"]
 SUCCESS_BG = _P["SUCCESS_BG"]
 INFO_BG = _P["INFO_BG"]
+ERROR_BORDER = _P["ERROR_BORDER"]
+SUCCESS_BORDER = _P["SUCCESS_BORDER"]
+INFO_BORDER = _P["INFO_BORDER"]
+ERROR_FIELD_BG = _P["ERROR_FIELD_BG"]
+BORDER_HOVER = _P["BORDER_HOVER"]
+DISABLED_BG = _P["DISABLED_BG"]
+PRIMARY_TEXT = _P["PRIMARY_TEXT"]
+PRIMARY_DISABLED_TEXT = _P["PRIMARY_DISABLED_TEXT"]
+PRIMARY_DISABLED_FROM = _P["PRIMARY_DISABLED_FROM"]
+PRIMARY_DISABLED_TO = _P["PRIMARY_DISABLED_TO"]
+OPEN_BUTTON_TOP = _P["OPEN_BUTTON_TOP"]
+PAGE_GRADIENT_TOP = _P["PAGE_GRADIENT_TOP"]
+PAGE_GRADIENT_MIDDLE = _P["PAGE_GRADIENT_MIDDLE"]
+PAGE_GRADIENT_BOTTOM = _P["PAGE_GRADIENT_BOTTOM"]
+HERO_TOP = _P["HERO_TOP"]
+HERO_MIDDLE = _P["HERO_MIDDLE"]
+HERO_BOTTOM = _P["HERO_BOTTOM"]
+TILE_DISABLED_BG = _P["TILE_DISABLED_BG"]
+PROGRESS_TRACK = _P["PROGRESS_TRACK"]
+PROGRESS_PAUSED = _P["PROGRESS_PAUSED"]
+PROGRESS_FAILED = _P["PROGRESS_FAILED"]
+TABLE_LINE = _P["TABLE_LINE"]
+CHART_GRID = _P["CHART_GRID"]
+SHADOW = _P["SHADOW"]
+SPLASH_BG = _P["SPLASH_BG"]
 
 SERIF = "Georgia"
 SANS = "Segoe UI"
@@ -75,9 +100,9 @@ QLabel#Divider {{ color: {SUBTLE}; font-size: 9pt; }}
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
     border-radius: 8px; padding: 9px 12px; font-size: 9.5pt;
 }}
-QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid #F3C9C3; }}
-QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid #BFE3D1; }}
-QLabel#InfoBanner {{ background: {INFO_BG}; color: {OCEAN_DARK}; border: 1px solid #C9DFF1; }}
+QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
+QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid {SUCCESS_BORDER}; }}
+QLabel#InfoBanner {{ background: {INFO_BG}; color: {OCEAN_DARK}; border: 1px solid {INFO_BORDER}; }}
 
 /* ---- card ---- */
 QFrame#AuthCard {{
@@ -96,10 +121,10 @@ QLineEdit {{
     color: {INK};
     selection-background-color: {OCEAN};
 }}
-QLineEdit:hover {{ border-color: #9CC5BA; }}
+QLineEdit:hover {{ border-color: {BORDER_HOVER}; }}
 QLineEdit:focus {{ border: 1.5px solid {LEAF}; background: {WHITE}; }}
-QLineEdit[invalid="true"] {{ border: 1.5px solid {ERROR}; background: #FFFBFA; }}
-QLineEdit:disabled {{ color: {SUBTLE}; background: #F3F6F5; }}
+QLineEdit[invalid="true"] {{ border: 1.5px solid {ERROR}; background: {ERROR_FIELD_BG}; }}
+QLineEdit:disabled {{ color: {SUBTLE}; background: {DISABLED_BG}; }}
 
 QCheckBox {{ color: {TEXT}; spacing: 8px; }}
 QCheckBox::indicator {{
@@ -117,7 +142,7 @@ QPushButton {{
     border-radius: 9px; padding: 10px 18px; font-size: 10.5pt; font-weight: 600;
 }}
 QPushButton#PrimaryButton {{
-    color: {WHITE}; border: none;
+    color: {PRIMARY_TEXT}; border: none;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
 }}
 QPushButton#PrimaryButton:hover {{
@@ -125,13 +150,13 @@ QPushButton#PrimaryButton:hover {{
 }}
 QPushButton#PrimaryButton:pressed {{ padding-top: 11px; padding-bottom: 9px; }}
 QPushButton#PrimaryButton:disabled {{
-    color: #F2F7F6;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8CCBB6, stop:1 #92BCE0);
+    color: {PRIMARY_DISABLED_TEXT};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_DISABLED_FROM}, stop:1 {PRIMARY_DISABLED_TO});
 }}
 QPushButton#SecondaryButton {{
     color: {INK}; background: {WHITE}; border: 1px solid {BORDER_STRONG};
 }}
-QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: #9CC5BA; }}
+QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
 QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 QPushButton#SecondaryButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton#LinkButton {{

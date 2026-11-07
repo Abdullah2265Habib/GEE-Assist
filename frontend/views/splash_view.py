@@ -9,7 +9,9 @@ from PyQt6.QtGui import QColor, QImage, QPainter
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PyQt6.QtWidgets import QWidget
 
-BACKGROUND = QColor("#FFFFFF")
+from frontend import theme
+
+BACKGROUND = QColor(theme.SPLASH_BG)
 WHITE_LIFT = QColor(6, 6, 6)
 # The video takes this share of the smaller screen side.
 VIDEO_SCREEN_SHARE = 0.62

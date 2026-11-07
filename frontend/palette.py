@@ -39,6 +39,33 @@ LIGHT: dict[str, str] = {
     "SUCCESS": "#23845E",
     "SUCCESS_BG": "#ECF7F1",
     "INFO_BG": "#EEF5FB",
+    "ERROR_BORDER": "#F3C9C3",
+    "SUCCESS_BORDER": "#BFE3D1",
+    "INFO_BORDER": "#C9DFF1",
+    "ERROR_FIELD_BG": "#FFFBFA",   # a field with an invalid value
+    # primary (gradient) buttons
+    "PRIMARY_TEXT": "#FFFFFF",
+    "PRIMARY_DISABLED_TEXT": "#F2F7F6",
+    "PRIMARY_DISABLED_FROM": "#8CCBB6",
+    "PRIMARY_DISABLED_TO": "#92BCE0",
+    "OPEN_BUTTON_TOP": "#4CB98E",  # "open folder" button: gradient into LEAF
+    # signed-in pages: background gradient
+    "PAGE_GRADIENT_TOP": "#F3FAF6",
+    "PAGE_GRADIENT_MIDDLE": "#F2F8FB",
+    "PAGE_GRADIENT_BOTTOM": "#ECF4FB",
+    # sign-in picture panel: background gradient
+    "HERO_TOP": "#EEF8F2",
+    "HERO_MIDDLE": "#EAF4F8",
+    "HERO_BOTTOM": "#E2EEF9",
+    # pieces of particular screens
+    "TILE_DISABLED_BG": "#FAFCFB",  # "coming soon" dashboard cards
+    "PROGRESS_TRACK": "#E4EEEB",
+    "PROGRESS_PAUSED": "#9DB8B2",
+    "PROGRESS_FAILED": "#E3A79F",
+    "TABLE_LINE": "#EDF3F1",
+    "CHART_GRID": "#E3EEEA",
+    "SHADOW": "#1E5A57",
+    "SPLASH_BG": "#FFFFFF",         # the intro video has a white background in every theme
 }
 
 ACTIVE: dict[str, str] = LIGHT

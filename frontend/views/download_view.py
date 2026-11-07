@@ -66,16 +66,16 @@ QLabel#JobTitle {{ color: {theme.INK}; font-size: 11pt; }}
 QLabel#JobStatus {{ color: {theme.INK}; font-weight: 600; letter-spacing: 0.4px; }}
 QLabel#JobEta, QLabel#JobSize, QLabel#JobWhen {{ color: {theme.TEXT}; }}
 QLabel#JobError {{ color: {theme.ERROR}; font-size: 9pt; }}
-QProgressBar#JobProgress {{ background: #E4EEEB; border: none; border-radius: 4px; }}
+QProgressBar#JobProgress {{ background: {theme.PROGRESS_TRACK}; border: none; border-radius: 4px; }}
 QProgressBar#JobProgress::chunk {{
     border-radius: 4px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});
 }}
-QProgressBar#JobProgress[state="paused"]::chunk {{ background: #9DB8B2; }}
-QProgressBar#JobProgress[state="failed"]::chunk {{ background: #E3A79F; }}
+QProgressBar#JobProgress[state="paused"]::chunk {{ background: {theme.PROGRESS_PAUSED}; }}
+QProgressBar#JobProgress[state="failed"]::chunk {{ background: {theme.PROGRESS_FAILED}; }}
 QPushButton#OpenButton {{
     color: {theme.WHITE}; font-size: 11pt; border: none; border-radius: 6px; padding: 0;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4CB98E, stop:1 {theme.LEAF});
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.OPEN_BUTTON_TOP}, stop:1 {theme.LEAF});
 }}
 QPushButton#OpenButton:hover {{ background: {theme.LEAF_DARK}; }}
 QFrame#DownloadFooter {{ background: {theme.WHITE}; border-top: 1px solid {theme.BORDER}; }}

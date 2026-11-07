@@ -39,6 +39,13 @@ HEADER_BLUE = _P["HEADER_BLUE"]
 HEADER_LINE = _P["HEADER_LINE"]
 ERROR = _P["ERROR"]
 SUCCESS = _P["SUCCESS"]
+ERROR_BG = _P["ERROR_BG"]
+SUCCESS_BG = _P["SUCCESS_BG"]
+INFO_BG = _P["INFO_BG"]
+ERROR_BORDER = _P["ERROR_BORDER"]
+SUCCESS_BORDER = _P["SUCCESS_BORDER"]
+INFO_BORDER = _P["INFO_BORDER"]
+ERROR_FIELD_BG = _P["ERROR_FIELD_BG"]
 
 SERIF = "Georgia"
 SANS = "Segoe UI"
@@ -132,9 +139,9 @@ QFrame#SectionCard QWidget {{ background: transparent; }}
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
     border-radius: 8px; padding: 7px 12px; font-size: 9.5pt;
 }}
-QLabel#ErrorBanner {{ background: #FDF1EF; color: {ERROR}; border: 1px solid #F3C9C3; }}
-QLabel#SuccessBanner {{ background: #ECF7F1; color: {SUCCESS}; border: 1px solid #BFE3D1; }}
-QLabel#InfoBanner {{ background: #EEF5FB; color: {OCEAN_DARK}; border: 1px solid #C9DFF1; }}
+QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
+QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid {SUCCESS_BORDER}; }}
+QLabel#InfoBanner {{ background: {INFO_BG}; color: {OCEAN_DARK}; border: 1px solid {INFO_BORDER}; }}
 
 /* ---- text ---- */
 QLabel {{ color: {TEXT}; background: transparent; }}
@@ -172,7 +179,7 @@ QLineEdit#PathField:focus {{ border: 1px solid {LEAF}; background: {WHITE}; }}
 QLineEdit#PathField[invalid="true"],
 QComboBox[invalid="true"], QSpinBox[invalid="true"], QDoubleSpinBox[invalid="true"],
 QDateEdit[invalid="true"], QWidget#CheckGrid[invalid="true"] {{
-    border: 1.5px solid {ERROR}; background: #FFFBFA;
+    border: 1.5px solid {ERROR}; background: {ERROR_FIELD_BG};
 }}
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {{ border-color: {BORDER_HOVER}; }}
 QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {{
