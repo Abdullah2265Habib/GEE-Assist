@@ -26,8 +26,9 @@ from PyQt6.QtWidgets import (
 
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO
-from frontend import theme
+from frontend import appearance, theme
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
+from frontend.restart import restart_app
 from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
@@ -217,6 +218,20 @@ class HomeWindow(QMainWindow):
             self.showNormal()
         self.menu_bar.full_screen.setChecked(on)
 
+    def change_theme(self, name: str) -> None:
+        """Save the theme and restart, as it is applied when the app starts."""
+        answer = QMessageBox.question(
+            self, "Change theme",
+            f"GEE-Assist restarts to use the {appearance.THEMES[name]} theme. A running download "
+            "is paused and can be resumed afterwards.\n\nRestart now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self.menu_bar.show_current_theme()
+            return
+        appearance.save_theme(name)
+        restart_app()
+
     def show_about(self) -> None:
         QMessageBox.about(
             self, "About GEE-Assist",
@@ -257,6 +272,7 @@ class HomeWindow(QMainWindow):
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
         bar.manage_users.triggered.connect(self.open_user_admin)
         bar.about.triggered.connect(self.show_about)
+        bar.theme_chosen.connect(self.change_theme)
 
     def open_user_admin(self) -> None:
         if self._admin_dialog is None:

@@ -279,3 +279,19 @@ def test_help_menu_shows_the_about_box(home, monkeypatch):
     monkeypatch.setattr(home_window.QMessageBox, "about", lambda parent, title, text: shown.append(title))
     home.menu_bar.about.trigger()
     assert shown == ["About GEE-Assist"]
+
+
+@pytest.mark.parametrize("answer, restarted", [("Yes", True), ("No", False)])
+def test_choosing_a_theme_saves_it_and_restarts(home, monkeypatch, answer, restarted):
+    from PyQt6.QtWidgets import QMessageBox
+
+    saved, restarts = [], []
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: getattr(QMessageBox.StandardButton, answer))
+    monkeypatch.setattr(home_window.appearance, "save_theme", saved.append)
+    monkeypatch.setattr(home_window, "restart_app", lambda: restarts.append(True))
+
+    home.menu_bar.theme_actions["dark-green"].trigger()
+
+    assert (saved, bool(restarts)) == ((["dark-green"], True) if restarted else ([], False))
+    if not restarted:  # cancelled: the theme in use stays ticked
+        assert home.menu_bar.theme_actions["light"].isChecked()
