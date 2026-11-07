@@ -19,7 +19,7 @@ from backend.bootstrap import build_business_facade
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO
 from frontend.assets import APP_ICON
-from frontend.form_theme import apply_light_mode
+from frontend.form_theme import apply_palette
 from frontend.theme import apply_theme
 from frontend.views.auth import AuthView
 from frontend.views.home_window import HomeWindow
@@ -89,7 +89,7 @@ def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("GEE-Assist")
     app.setWindowIcon(QIcon(str(APP_ICON)))
-    apply_light_mode(app)  # stay light even when Windows is in dark mode
+    apply_palette(app)  # the chosen theme, whatever colour scheme Windows uses
     apply_theme(app)
     install_wheel_guard(app)  # wheel only edits a field the user has selected
 

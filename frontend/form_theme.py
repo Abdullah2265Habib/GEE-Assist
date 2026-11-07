@@ -65,13 +65,14 @@ def qcolor(hex_value: str, alpha: int = 255) -> QColor:
     return c
 
 
-def apply_light_mode(app: QApplication) -> None:
-    """Keep the app light even when Windows is in dark mode.
+def apply_palette(app: QApplication) -> None:
+    """Give Qt the theme's colours, whatever colour scheme Windows uses.
 
-    Fusion follows the system colour scheme, which is what turned the form dark.
+    Fusion follows the system colour scheme, which turned the light form dark: the
+    scheme is set to the theme's (light or dark) instead.
     """
     app.setStyle("Fusion")
-    app.styleHints().setColorScheme(Qt.ColorScheme.Light)
+    app.styleHints().setColorScheme(Qt.ColorScheme.Dark if palette.IS_DARK else Qt.ColorScheme.Light)
 
     p = QPalette()
     roles = {
