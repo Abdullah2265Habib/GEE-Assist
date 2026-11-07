@@ -36,6 +36,7 @@ from frontend.views.main_window import MainWindow
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
+from frontend.widgets.side_icons import DownloadIcon, WritingIcon
 
 PAGE_BACKGROUND = (
     "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
@@ -108,7 +109,8 @@ class HomeWindow(QMainWindow):
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
         self.back_button = self.side_bar.back_button
         self.back_button.setToolTip("Back to the dashboard")
-        self.downloads_button = self.side_bar.add_button("Downloads", "D")
+        self.query_input_button = self.side_bar.add_button("Query Input", "Q", icon=WritingIcon())
+        self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
         self.manage_users = self.side_bar.add_button("Manage users", "M")
         self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
         self.profile = ProfileButton()
@@ -176,6 +178,7 @@ class HomeWindow(QMainWindow):
         self.signup_details_action.triggered.connect(self.show_signup_details)
         self.dashboard.open_query_input.connect(self.show_query_input)
         self.dashboard.open_downloads.connect(self.show_downloads)
+        self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.query_input.download_requested.connect(self.start_download)
         self._connect_menu_bar()
@@ -246,6 +249,7 @@ class HomeWindow(QMainWindow):
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
         self.side_bar.show_back(page is not self.dashboard)  # nowhere to go back to on the dashboard
+        self.query_input_button.setVisible(page is not self.query_input)
         self.downloads_button.setVisible(page is not self.downloads)
 
     # ------------------------------------------------------------- account

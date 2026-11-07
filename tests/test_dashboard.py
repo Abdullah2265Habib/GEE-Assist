@@ -52,7 +52,7 @@ def test_opens_on_the_dashboard_with_a_greeting(home):
     assert home.current_page() is home.dashboard
     assert home.dashboard.greeting.text() == "Welcome, Ayesha"
     assert home.back_button.isHidden()
-    assert not home.side_bar.is_expanded() and home.downloads_button.text() == "D"  # side bar starts collapsed
+    assert not home.side_bar.is_expanded() and home.downloads_button.text() == ""  # collapsed: icons only
 
 
 def test_query_input_button_opens_the_parameter_form(home):
@@ -102,12 +102,13 @@ def test_navigation_is_in_a_side_bar_without_the_app_name(home):
     assert home.side_bar.logo.iconSize().width() == 64  # larger than the old 36 px header logo
 
 
-def test_collapsed_side_bar_shows_short_labels(home):
+def test_collapsed_side_bar_shows_icons_only(home):
     home.side_bar.set_expanded(False, animate=False)
-    assert home.downloads_button.text() == "D"
+    assert home.downloads_button.text() == "" and home.query_input_button.text() == ""  # icons only
     assert home.profile.details.isHidden()
     home.side_bar.set_expanded(True, animate=False)
-    assert home.downloads_button.text() == "Downloads" and not home.profile.details.isHidden()
+    assert home.downloads_button.text() == "Downloads" and home.query_input_button.text() == "Query Input"
+    assert not home.profile.details.isHidden()
 
 
 def test_collapsed_avatar_is_centred_under_the_logo(home):
@@ -295,3 +296,20 @@ def test_choosing_a_theme_saves_it_and_restarts(home, monkeypatch, answer, resta
     assert (saved, bool(restarts)) == ((["dark-green"], True) if restarted else ([], False))
     if not restarted:  # cancelled: the theme in use stays ticked
         assert home.menu_bar.theme_actions["light"].isChecked()
+
+
+def test_side_bar_offers_query_input_and_downloads_with_animated_icons(home):
+    from frontend.widgets.side_icons import DownloadIcon, WritingIcon
+
+    assert isinstance(home.query_input_button.icon_drawing, WritingIcon)
+    assert isinstance(home.downloads_button.icon_drawing, DownloadIcon)
+    items = home.side_bar._items
+    assert items.indexOf(home.query_input_button) < items.indexOf(home.downloads_button)  # Query Input first
+
+    home.query_input_button.click()
+    assert isinstance(home.current_page(), StubQueryWorkspace)
+    assert home.query_input_button.isHidden() and not home.downloads_button.isHidden()  # not its own page
+
+    home.downloads_button.click()
+    assert home.current_page() is home.downloads
+    assert not home.query_input_button.isHidden() and home.downloads_button.isHidden()
