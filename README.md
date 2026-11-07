@@ -49,8 +49,10 @@ Run the tests with `python -m pytest`.
     Full screen (F11), Theme
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: About GEE-Assist
-- Navigation is in a side bar on the left. It starts collapsed (short labels, e.g. "D");
-  clicking the logo slides it open (full names, e.g. "Downloads") or closed again.
+- Navigation is in a side bar on the left: **Query Input** and **Downloads**, each with an icon that
+  animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding down into a
+  tray). It starts collapsed (icons only); clicking the logo slides it open (icons and names) or
+  closed again.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
@@ -102,7 +104,7 @@ How it works:
 | Theme (colours, fonts, styles) | `frontend/theme.py` |
 | Admin user management | `frontend/views/user_admin_view.py` |
 | Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
-| Side bar | `frontend/widgets/side_bar.py` |
+| Side bar | `frontend/widgets/side_bar.py`, `frontend/widgets/side_icons.py` |
 | Menu bar | `frontend/widgets/menu_bar.py` |
 | Themes (colours, saved choice, first-run dialog) | `frontend/palette.py`, `frontend/appearance.py`, `frontend/views/theme_choice_dialog.py` |
 | Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |
