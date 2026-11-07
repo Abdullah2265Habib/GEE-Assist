@@ -76,12 +76,17 @@ def test_there_is_no_separate_dashboard_item(home):
 
 
 def test_back_button_returns_to_the_dashboard(home):
-    assert home.back_button.isHidden()  # already on the dashboard
     home.show_downloads()
-    assert not home.back_button.isHidden()
+    assert not home.back_button.isHidden() and home.side_bar.home_icon.isHidden()
 
     home.back_button.click()
     assert home.current_page() is home.dashboard and home.back_button.isHidden()
+
+
+def test_dashboard_shows_a_home_icon_instead_of_the_back_button(home):
+    home_icon = home.side_bar.home_icon
+    assert not home_icon.isHidden() and home.back_button.isHidden()
+    assert home_icon.text() == "⌂" and home_icon.toolTip() == "You are on the dashboard"
 
 
 def test_navigation_is_in_a_side_bar_without_the_app_name(home):

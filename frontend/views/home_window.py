@@ -103,6 +103,7 @@ class HomeWindow(QMainWindow):
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
         self.back_button = self.side_bar.back_button
         self.back_button.setToolTip("Back to the dashboard")
+        self.side_bar.home_icon.setToolTip("You are on the dashboard")
         self.downloads_button = self.side_bar.add_button("Downloads", "D")
         self.manage_users = self.side_bar.add_button("Manage users", "M")
         self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
@@ -206,7 +207,7 @@ class HomeWindow(QMainWindow):
 
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
-        self.back_button.setVisible(page is not self.dashboard)  # nowhere to go back to on the dashboard
+        self.side_bar.show_back(page is not self.dashboard)  # on the dashboard: the home icon instead
         self.downloads_button.setVisible(page is not self.downloads)
 
     # ------------------------------------------------------------- account
