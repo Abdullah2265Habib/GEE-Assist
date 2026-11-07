@@ -2,9 +2,8 @@
 
 The bar slides between two widths when its logo is clicked. Expanded, its buttons
 show their full names ("Downloads"); collapsed, only a short label ("D"). It starts
-collapsed unless created with ``expanded=True``. Above the logo is either a round
-back button or, with ``show_back(False)``, a home icon that only marks where you are;
-the bar's owner decides where "back" leads and which of the two shows.
+collapsed unless created with ``expanded=True``. A round back button sits above
+the logo; the bar's owner decides where it leads and, with ``show_back``, when it shows.
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
@@ -25,9 +24,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QPushButton,
-    QLabel,
     QSizePolicy,
-    QStackedLayout,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -53,7 +50,6 @@ QToolButton#SideBack {{
 }}
 QToolButton#SideBack:hover {{ background: {theme.FOAM}; }}
 QToolButton#SideBack:pressed {{ background: {theme.MINT}; }}
-QLabel#SideHome {{ color: {theme.INK}; font-size: 17pt; background: transparent; }}
 QPushButton#SideButton {{
     border: none; border-radius: 8px; background: transparent; color: {theme.INK};
     font-weight: 600; text-align: left; padding: 0 14px;
@@ -112,18 +108,12 @@ class SideBar(QFrame):
         self.back_button.setToolTip("Back")
         self.back_button.setFixedSize(BUTTON_HEIGHT, BUTTON_HEIGHT)
         self.back_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.home_icon = QLabel("⌂", objectName="SideHome")  # shows where you are; does nothing
-        self.home_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.home_icon.setFixedSize(BUTTON_HEIGHT, BUTTON_HEIGHT)
-        # One fixed slot for the two, so the logo below never moves when they swap.
-        top_slot = QWidget()
-        top_slot.setFixedSize(BUTTON_HEIGHT, BUTTON_HEIGHT)
-        self._top = QStackedLayout(top_slot)
-        self._top.addWidget(self.back_button)
-        self._top.addWidget(self.home_icon)
+        policy = self.back_button.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)  # hidden, it keeps its place: the logo does not jump
+        self.back_button.setSizePolicy(policy)
         back_row = QHBoxLayout()  # centred above the logo, like the circles below it
         back_row.setContentsMargins((LOGO_SIZE - BUTTON_HEIGHT) // 2, 0, 0, 0)
-        back_row.addWidget(top_slot)
+        back_row.addWidget(self.back_button)
         back_row.addStretch(1)
 
         self._items = QVBoxLayout()
@@ -165,8 +155,8 @@ class SideBar(QFrame):
             self._apply_compact(widget, not self._expanded)
 
     def show_back(self, show: bool) -> None:
-        """The back button (``True``) or the home icon (``False``) above the logo."""
-        self._top.setCurrentWidget(self.back_button if show else self.home_icon)
+        """Show or hide the back button above the logo."""
+        self.back_button.setVisible(show)
 
     # ------------------------------------------------------------- sliding
     def is_expanded(self) -> bool:

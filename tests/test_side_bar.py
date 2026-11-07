@@ -171,16 +171,15 @@ def test_back_button_is_a_circle_centred_above_the_logo(bar):
     assert abs(back.center().x() - logo.center().x()) <= 1
 
 
-def test_home_icon_takes_the_back_buttons_place(bar):
+def test_hidden_back_button_keeps_its_place(bar):
     bar.show()
     QApplication.processEvents()
-    back, logo_top = _in_bar(bar, bar.back_button), bar.logo.y()
+    logo_top = bar.logo.y()
 
     bar.show_back(False)
     QApplication.processEvents()
-    assert bar.back_button.isHidden() and not bar.home_icon.isHidden()
-    assert _in_bar(bar, bar.home_icon) == back      # the same spot
-    assert bar.logo.y() == logo_top                 # the logo does not move
+    assert bar.back_button.isHidden()
+    assert bar.logo.y() == logo_top  # the logo does not jump between pages
 
     bar.show_back(True)
-    assert not bar.back_button.isHidden() and bar.home_icon.isHidden()
+    assert not bar.back_button.isHidden()
