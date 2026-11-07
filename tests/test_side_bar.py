@@ -50,11 +50,20 @@ def bar(app):
     side.deleteLater()
 
 
-def test_starts_expanded_with_full_names(bar):
+def test_starts_collapsed_with_short_labels(bar):
+    downloads = bar.add_button("Downloads", "D")
+    assert not bar.is_expanded() and bar.width() == COLLAPSED_WIDTH
+    assert downloads.text() == "D"
+    assert bar.logo.toolTip() == "Expand the side bar"
+
+
+def test_can_start_expanded_with_full_names(app):
+    bar = SideBar(QPixmap(48, 48), expanded=True)
     downloads = bar.add_button("Downloads", "D")
     assert bar.is_expanded() and bar.width() == EXPANDED_WIDTH
     assert downloads.text() == "Downloads"
     assert bar.logo.toolTip() == "Collapse the side bar"
+    bar.deleteLater()
 
 
 def test_collapsed_shows_short_labels(bar):
@@ -77,33 +86,33 @@ def test_widgets_added_while_collapsed_start_compact(bar):
     assert bar.add_button("Sign out", "S").text() == "S"
 
 
-def test_clicking_the_logo_slides_the_bar_closed_and_open(bar):
+def test_clicking_the_logo_slides_the_bar_open_and_closed(bar):
     downloads = bar.add_button("Downloads", "D")
     bar.show()
     changes = []
     bar.expanded_changed.connect(changes.append)
 
     bar.logo.click()
-    assert bar.is_sliding() and not bar.is_expanded()
-    assert downloads.text() == "Downloads"   # covered as the bar narrows, switched at the end
-    _wait_for_slide(bar)
-    assert not bar.is_sliding() and bar.width() == COLLAPSED_WIDTH and downloads.text() == "D"
-
-    bar.logo.click()
+    assert bar.is_sliding() and bar.is_expanded()
     assert downloads.text() == "Downloads"   # uncovered as the bar widens
     _wait_for_slide(bar)
-    assert bar.width() == EXPANDED_WIDTH
-    assert changes == [False, True]
+    assert not bar.is_sliding() and bar.width() == EXPANDED_WIDTH
+
+    bar.logo.click()
+    assert downloads.text() == "Downloads"   # covered as the bar narrows, switched at the end
+    _wait_for_slide(bar)
+    assert bar.width() == COLLAPSED_WIDTH and downloads.text() == "D"
+    assert changes == [True, False]
 
 
 def test_reversing_mid_slide_ends_at_the_new_width(bar):
     downloads = bar.add_button("Downloads", "D")
     bar.show()
-    bar.logo.click()                          # start closing
+    bar.logo.click()                          # start opening
     QTest.qWait(SLIDE_MS // 3)
-    bar.logo.click()                          # open again before it finished
+    bar.logo.click()                          # close again before it finished
     _wait_for_slide(bar)
-    assert bar.is_expanded() and bar.width() == EXPANDED_WIDTH and downloads.text() == "Downloads"
+    assert not bar.is_expanded() and bar.width() == COLLAPSED_WIDTH and downloads.text() == "D"
 
 
 def test_footer_buttons_sit_below_the_navigation(bar):

@@ -1,7 +1,8 @@
 """Vertical navigation bar on the left of the signed-in window.
 
 The bar slides between two widths when its logo is clicked. Expanded, its buttons
-show their full names ("Downloads"); collapsed, only a short label ("D").
+show their full names ("Downloads"); collapsed, only a short label ("D"). It starts
+collapsed unless created with ``expanded=True``.
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
@@ -79,11 +80,11 @@ class SideButton(QPushButton):
 class SideBar(QFrame):
     expanded_changed = pyqtSignal(bool)
 
-    def __init__(self, logo: QPixmap, parent: QWidget | None = None):
+    def __init__(self, logo: QPixmap, parent: QWidget | None = None, expanded: bool = False):
         super().__init__(parent)
         self.setObjectName("SideBar")
         self.setStyleSheet(STYLESHEET)
-        self._expanded = True
+        self._expanded = expanded
         self._compact_widgets: list[QWidget] = []
         self._layout_of: dict[QWidget, QBoxLayout] = {}
 
@@ -106,12 +107,13 @@ class SideBar(QFrame):
         layout.addStretch(1)
         layout.addLayout(self._footer)
 
-        self.setFixedWidth(EXPANDED_WIDTH)
+        width = EXPANDED_WIDTH if expanded else COLLAPSED_WIDTH
+        self.setFixedWidth(width)
         self._slide = QTimer(self)
         self._slide.setInterval(FRAME_MS)
         self._slide.timeout.connect(self._slide_step)
         self._slide_clock = QElapsedTimer()
-        self._slide_from = self._slide_to = EXPANDED_WIDTH
+        self._slide_from = self._slide_to = width
         self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
         self._update_logo_tip()
 

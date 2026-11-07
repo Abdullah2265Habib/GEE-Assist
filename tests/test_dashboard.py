@@ -52,6 +52,7 @@ def test_opens_on_the_dashboard_with_a_greeting(home):
     assert home.current_page() is home.dashboard
     assert home.dashboard.greeting.text() == "Welcome, Ayesha"
     assert home.dashboard_button.isHidden()
+    assert not home.side_bar.is_expanded() and home.downloads_button.text() == "D"  # side bar starts collapsed
 
 
 def test_query_input_button_opens_the_parameter_form(home):
