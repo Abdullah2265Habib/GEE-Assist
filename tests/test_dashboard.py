@@ -272,3 +272,10 @@ def test_manage_users_is_in_the_options_menu_for_administrators_only(home, monke
     monkeypatch.setattr(home_window, "UserAdminDialog", FakeAdminDialog)
     home.menu_bar.manage_users.trigger()
     assert FakeAdminDialog.opened == 1
+
+
+def test_help_menu_shows_the_about_box(home, monkeypatch):
+    shown = []
+    monkeypatch.setattr(home_window.QMessageBox, "about", lambda parent, title, text: shown.append(title))
+    home.menu_bar.about.trigger()
+    assert shown == ["About GEE-Assist"]

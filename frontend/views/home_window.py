@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -217,6 +218,14 @@ class HomeWindow(QMainWindow):
             self.showNormal()
         self.menu_bar.full_screen.setChecked(on)
 
+    def show_about(self) -> None:
+        QMessageBox.about(
+            self, "About GEE-Assist",
+            "<h3>GEE-Assist</h3>"
+            "<p>Describe a request in plain language or fill the parameter form, then download "
+            "the imagery from Google Earth Engine in chunks, merged into one GeoTIFF.</p>",
+        )
+
     def current_page(self) -> QWidget:
         return self.pages.currentWidget()
 
@@ -248,6 +257,7 @@ class HomeWindow(QMainWindow):
         bar.full_screen.triggered.connect(self.set_full_screen)
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
         bar.manage_users.triggered.connect(self.open_user_admin)
+        bar.about.triggered.connect(self.show_about)
 
     def open_user_admin(self) -> None:
         if self._admin_dialog is None:
