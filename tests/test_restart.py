@@ -29,4 +29,4 @@ def test_restart_quits_then_starts_the_app_again(app, monkeypatch):
 
     app.aboutToQuit.emit()
     assert events[1] == (sys.executable, sys.argv, os.getcwd())
-    app.aboutToQuit.disconnect(restart._start_again)
+    app.aboutToQuit.disconnect(restart.start_again)

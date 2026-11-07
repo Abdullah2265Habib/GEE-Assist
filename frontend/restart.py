@@ -16,10 +16,11 @@ def restart_app() -> None:
     paused first, see ``app.py``), so the two never work on a download at once.
     """
     app = QApplication.instance()
-    app.aboutToQuit.connect(_start_again)  # after the download shutdown, connected earlier
+    app.aboutToQuit.connect(start_again)  # after the download shutdown, connected earlier
     app.quit()
 
 
-def _start_again() -> None:
+def start_again() -> None:
+    """Start a new copy of the app (this one should then close)."""
     args = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv  # a packaged .exe is sys.executable
     QProcess.startDetached(sys.executable, args, os.getcwd())
