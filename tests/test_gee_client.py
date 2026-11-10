@@ -275,6 +275,86 @@ def test_no_matching_images_is_a_clear_error(fake_ee):
         GEEClient(project="p")._build_image(_form(), ["B4"])
 
 
+# ------------------------------------------------------------------ set-up checks
+def _statuses(checks):
+    return [(check.name, check.status) for check in checks]
+
+
+def test_diagnose_without_the_library(monkeypatch):
+    def missing():
+        raise GEESetupError("The Earth Engine library is missing: pip install earthengine-api")
+
+    monkeypatch.setattr(GEEClient, "_ee", staticmethod(missing))
+    checks = GEEClient(project="p").diagnose()
+    assert _statuses(checks) == [
+        ("Earth Engine library", "fail"), ("Cloud project (GEE_PROJECT)", "ok"),
+        ("Sign-in on this computer", "skip"), ("Connection", "skip"), ("Test request", "skip"),
+    ]
+    assert "pip install earthengine-api" in checks[0].hint
+
+
+def test_diagnose_without_a_project(fake_ee, tmp_path, monkeypatch):
+    ee, _ = fake_ee
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    ee.oauth.get_credentials_path.return_value = str(tmp_path / "credentials")
+    checks = GEEClient(project="").diagnose()
+    assert _statuses(checks)[1:] == [
+        ("Cloud project (GEE_PROJECT)", "fail"), ("Sign-in on this computer", "warn"),
+        ("Connection", "skip"), ("Test request", "skip"),
+    ]
+    assert "GEE_PROJECT" in checks[1].hint and str(tmp_path / "credentials") in checks[2].detail
+    ee.Initialize.assert_not_called()
+
+
+def test_diagnose_when_everything_works(fake_ee, tmp_path):
+    ee, _ = fake_ee
+    credentials = tmp_path / "credentials"
+    credentials.write_text("{}")
+    ee.oauth.get_credentials_path.return_value = str(credentials)
+    ee.__version__ = "1.7.48"
+    checks = GEEClient(project="my-project").diagnose()
+    assert all(check.status == "ok" for check in checks), _statuses(checks)
+    assert checks[0].detail == "earthengine-api 1.7.48" and checks[1].detail == "my-project"
+    assert str(credentials) in checks[2].detail
+    ee.Initialize.assert_called_once_with(project="my-project")
+    assert checks[4].duration_ms is not None and "answered in" in checks[4].detail
+
+
+def test_diagnose_reports_a_failed_connection(fake_ee, tmp_path, monkeypatch):
+    ee, _ = fake_ee
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    ee.oauth.get_credentials_path.return_value = str(tmp_path / "missing")
+    ee.Initialize.side_effect = Exception("Please authorize access to your Earth Engine account")
+    checks = GEEClient(project="p").diagnose()
+    assert _statuses(checks)[2:] == [("Sign-in on this computer", "warn"), ("Connection", "fail"), ("Test request", "skip")]
+    assert "earthengine authenticate" in checks[3].detail
+
+
+def test_diagnose_reports_a_failed_test_request(fake_ee):
+    ee, _ = fake_ee
+    ee.Number.return_value.getInfo.side_effect = Exception("Project 'p' is not registered to use Earth Engine")
+    checks = GEEClient(project="p").diagnose()
+    assert checks[3].status == "ok" and checks[4].status == "fail" and "Register it" in checks[4].detail
+
+
+def test_signing_in_connects_again_with_the_new_credentials(fake_ee):
+    ee, _ = fake_ee
+    sign_in = MagicMock()
+    sign_in.begin.return_value = "https://accounts.google.com/o/oauth2/auth?client_id=x"
+    sign_in.wait.return_value = "C:/Users/me/.config/earthengine/credentials"
+    client = GEEClient(project="p", sign_in=sign_in)
+    client._initialize()
+
+    assert client.begin_sign_in().startswith("https://accounts.google.com/")
+    stop = MagicMock(return_value=False)
+    assert client.complete_sign_in(stop).endswith("credentials")
+    sign_in.wait.assert_called_once_with(stop)
+    client._initialize()
+    assert ee.Initialize.call_count == 2  # connected again after signing in
+    client.cancel_sign_in()
+    sign_in.cancel.assert_called_once_with()
+
+
 # ------------------------------------------------------------------ access and errors
 def test_missing_project_is_reported():
     with pytest.raises(GEESetupError, match="GEE_PROJECT"):
