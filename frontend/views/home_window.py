@@ -37,6 +37,7 @@ from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.gkonsol.form_port import WidgetForm
+from frontend.gkonsol.help import REFERENCE_FILE
 from frontend.gkonsol.history import GkonsolStore, History
 from frontend.gkonsol.panel import GkonsolPanel, TerminalArea
 from frontend.gkonsol.ports import MemoryForm
@@ -345,6 +346,12 @@ class HomeWindow(QMainWindow):
         self.terminal_area.show_terminal()
         self.terminal.run_command(line)
 
+    def open_command_reference(self) -> None:
+        """docs/GKONSOL.md in the app that opens .md files; the terminal's own help if that fails."""
+        opened = REFERENCE_FILE.is_file() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(REFERENCE_FILE)))
+        if not opened:
+            self.run_in_terminal("help")
+
     def _update_terminal_menu(self) -> None:
         """Before the Terminal menu opens: tick Maximise if it is, and offer Stop only while a command runs."""
         self.menu_bar.maximize_terminal.setChecked(self.terminal_area.is_terminal_maximized())
@@ -381,6 +388,7 @@ class HomeWindow(QMainWindow):
         bar.clear_terminal.triggered.connect(self.terminal.shell.clear)
         bar.stop_command.triggered.connect(self.terminal.stop_command)
         bar.terminal_command.connect(self.run_in_terminal)
+        bar.command_reference.triggered.connect(self.open_command_reference)
         bar.full_screen.triggered.connect(self.set_full_screen)
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
         bar.manage_users.triggered.connect(self.open_user_admin)
