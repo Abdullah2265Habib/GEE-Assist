@@ -6,6 +6,8 @@ usage, description, options, subcommands and examples.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from frontend.gkonsol import text
 from frontend.gkonsol.command import Command, Registry
 from frontend.gkonsol.text import Line, Span
@@ -15,6 +17,8 @@ NOT_A_SHELL = ("Its commands run inside GEE-Assist only: they are not Windows, P
                "and those do not work here.")
 KEYS = ("Tab completes  ·  ↑ ↓ history  ·  Ctrl+C stops a command  ·  Ctrl+L clears  ·  "
         "Ctrl+` shows or hides the terminal")
+# Every command, with examples: opened by Terminal → Command reference.
+REFERENCE_FILE = Path(__file__).resolve().parents[2] / "docs" / "GKONSOL.md"
 
 
 def overview(registry: Registry, is_admin: bool) -> list[Line]:
@@ -28,6 +32,7 @@ def overview(registry: Registry, is_admin: bool) -> list[Line]:
         lines.append([])
     lines.append([Span("Type ", text.MUTED), Span("help <command>", text.INFO),
                   Span(" for its options and examples, e.g. ", text.MUTED), Span("help download", text.INFO), Span(".", text.MUTED)])
+    lines.append([Span("Every command is described in docs/GKONSOL.md (Terminal → Command reference).", text.MUTED)])
     lines.append([Span(KEYS, text.MUTED)])
     return lines
 

@@ -17,6 +17,13 @@ def test_help_lists_the_commands_by_group(term):
     assert "General" in printed and "  history" in printed and "Ctrl+C stops a command" in printed
 
 
+def test_help_says_where_the_reference_is():
+    from frontend.gkonsol.help import REFERENCE_FILE
+
+    assert REFERENCE_FILE.is_file() and REFERENCE_FILE.name == "GKONSOL.md"
+    assert "docs/GKONSOL.md (Terminal → Command reference)" in terminal().type("help")
+
+
 def test_help_for_one_command(term):
     printed = term.type("help history")
     assert "history — Show the commands typed before" in printed
