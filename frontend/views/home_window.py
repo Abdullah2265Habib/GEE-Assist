@@ -1,12 +1,13 @@
 """Window shown after signing in.
 
-A menu bar along the top (File, Edit, View, Options, Help) over a side bar on the
+A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to four pages: the dashboard (start page), the query-input workspace, downloads and the
 account card. Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
-side bar's Terminal button or View → Terminal (Ctrl+`), and as tall as the user drags it.
+side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
+as the user drags it. The Terminal menu also runs common commands in it.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.gkonsol.form_port import WidgetForm
+from frontend.gkonsol.help import REFERENCE_FILE
 from frontend.gkonsol.history import GkonsolStore, History
 from frontend.gkonsol.panel import GkonsolPanel, TerminalArea
 from frontend.gkonsol.ports import MemoryForm
@@ -329,9 +331,32 @@ class HomeWindow(QMainWindow):
     def toggle_terminal(self) -> None:
         self.terminal_area.toggle_terminal()
 
+    def set_terminal_visible(self, shown: bool) -> None:
+        if shown:
+            self.terminal_area.show_terminal()
+        else:
+            self.terminal_area.hide_terminal()
+
     def _terminal_shown(self, shown: bool) -> None:
         self.terminal_button.setChecked(shown)
         self.menu_bar.toggle_terminal.setChecked(shown)
+        self.menu_bar.show_terminal.setChecked(shown)
+
+    def run_in_terminal(self, line: str) -> None:
+        """Open the terminal and run ``line`` in it, as if it were typed (the Terminal menu's commands)."""
+        self.terminal_area.show_terminal()
+        self.terminal.run_command(line)
+
+    def open_command_reference(self) -> None:
+        """docs/GKONSOL.md in the app that opens .md files; the terminal's own help if that fails."""
+        opened = REFERENCE_FILE.is_file() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(REFERENCE_FILE)))
+        if not opened:
+            self.run_in_terminal("help")
+
+    def _update_terminal_menu(self) -> None:
+        """Before the Terminal menu opens: tick Maximise if it is, and offer Stop only while a command runs."""
+        self.menu_bar.maximize_terminal.setChecked(self.terminal_area.is_terminal_maximized())
+        self.menu_bar.stop_command.setEnabled(self.terminal.shell.running is not None)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt API)
         self.terminal.shutdown()  # e.g. an Earth Engine sign-in stops waiting for the browser
@@ -356,10 +381,15 @@ class HomeWindow(QMainWindow):
         bar.view_account.triggered.connect(self.show_account)
         bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
         bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
-        bar.toggle_terminal.triggered.connect(
-            lambda shown: self.terminal_area.show_terminal() if shown else self.terminal_area.hide_terminal()
-        )
+        bar.toggle_terminal.triggered.connect(self.set_terminal_visible)
         self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
+        bar.terminal_menu.aboutToShow.connect(self._update_terminal_menu)
+        bar.show_terminal.triggered.connect(self.set_terminal_visible)
+        bar.maximize_terminal.triggered.connect(self.terminal_area.set_terminal_maximized)
+        bar.clear_terminal.triggered.connect(self.terminal.shell.clear)
+        bar.stop_command.triggered.connect(self.terminal.stop_command)
+        bar.terminal_command.connect(self.run_in_terminal)
+        bar.command_reference.triggered.connect(self.open_command_reference)
         bar.full_screen.triggered.connect(self.set_full_screen)
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
         bar.manage_users.triggered.connect(self.open_user_admin)

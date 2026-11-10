@@ -287,11 +287,33 @@ class GkonsolPanel(QFrame):
 
     def _interrupt(self) -> None:
         if self.shell.running is not None:
-            self.shell.interrupt()
-        else:  # like other shells: the line typed so far is dropped
-            self.shell.out.lines([self.shell.prompt() + [Span(self.input.text(), text.COMMAND), Span("^C", text.MUTED)]])
-            self.input.clear()
+            self.stop_command()
+            return
+        # Nothing runs: like other shells, the line typed so far is dropped.
+        self.shell.out.lines([self.shell.prompt() + [Span(self.input.text(), text.COMMAND), Span("^C", text.MUTED)]])
+        self.input.clear()
         self.refresh_prompt()
+
+    # ------------------------------------------------------------- for the Terminal menu
+    def run_command(self, line: str) -> bool:
+        """Run ``line`` as if it were typed. Refused (False) while another command runs or asks
+        something: the line would be taken as the answer."""
+        if self.shell is None:
+            return False
+        if self.shell.running is not None:
+            self.shell.out.muted(f"'{line}' did not run: a command is still running. "
+                                 "Press Ctrl+C to stop it, then try again.")
+            return False
+        self.shell.submit(line)
+        self.refresh_prompt()
+        self.focus_input()
+        return True
+
+    def stop_command(self) -> None:
+        """Stop the running command, as Ctrl+C does."""
+        if self.shell is not None and self.shell.running is not None:
+            self.shell.interrupt()
+            self.refresh_prompt()
 
     def _complete(self) -> None:
         before = self.input.text()[:self.input.cursorPosition()]

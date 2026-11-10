@@ -399,3 +399,80 @@ def test_closing_the_window_stops_a_running_command(home):
     assert home.terminal.shell.running is not None
     home.close()
     assert home.terminal.shell.running is None
+
+
+# ------------------------------------------------------------------ the Terminal menu
+def test_terminal_menu_shows_the_terminal_in_step_with_the_side_bar_and_view_menu(home):
+    home.show()
+    home.menu_bar.show_terminal.trigger()
+    assert home.terminal_area.is_terminal_visible()
+    assert home.terminal_button.isChecked() and home.menu_bar.toggle_terminal.isChecked()
+    home.terminal_button.click()  # closed from the side bar: the menu follows
+    assert not home.menu_bar.show_terminal.isChecked() and not home.terminal_area.is_terminal_visible()
+    home.hide()
+
+
+def test_terminal_menu_maximises_and_clears(home):
+    home.show()
+    home.menu_bar.maximize_terminal.trigger()
+    assert home.terminal_area.is_terminal_visible() and home.terminal_area.is_terminal_maximized()
+    home.terminal.shell.submit("echo something")
+    home.menu_bar.clear_terminal.trigger()
+    assert home.terminal.view.toPlainText() == ""
+    home.menu_bar.maximize_terminal.trigger()
+    assert not home.terminal_area.is_terminal_maximized()
+    home.hide()
+
+
+def test_terminal_menu_offers_stop_only_while_a_command_runs(home):
+    home.menu_bar.terminal_menu.aboutToShow.emit()
+    assert not home.menu_bar.stop_command.isEnabled()
+    home.terminal.shell.submit("download speed")  # runs until stopped
+    home.menu_bar.terminal_menu.aboutToShow.emit()
+    assert home.menu_bar.stop_command.isEnabled()
+    home.menu_bar.stop_command.trigger()
+    assert home.terminal.shell.running is None
+
+
+def test_terminal_menu_ticks_maximise_when_the_header_button_maximised(home):
+    home.show()
+    home.toggle_terminal()
+    home.terminal.maximize_button.click()
+    home.menu_bar.terminal_menu.aboutToShow.emit()
+    assert home.menu_bar.maximize_terminal.isChecked()
+    home.hide()
+
+
+def test_terminal_menu_commands_open_the_terminal_and_run_there(home):
+    home.show()
+    home.menu_bar.terminal_commands["download list"].trigger()
+    assert home.terminal_area.is_terminal_visible()
+    assert "ayesha@gkonsol ~ $ download list" in home.terminal.view.toPlainText()  # typed for you to see
+    assert "No downloads yet." in home.terminal.view.toPlainText()
+    home.hide()
+
+
+def test_terminal_menu_commands_wait_for_a_question_to_be_answered(home):
+    home.terminal.shell.submit("signout")  # asks "Sign out of GEE-Assist? [y/N]"
+    signed_out = []
+    home.signed_out.connect(signed_out.append)
+    home.menu_bar.terminal_commands["help"].trigger()
+    assert home.terminal.shell.runner.asking is not None and signed_out == []
+    assert "'help' did not run" in home.terminal.view.toPlainText()
+
+
+def test_command_reference_opens_the_document(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home_window.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True)
+    home.menu_bar.command_reference.trigger()
+    assert len(opened) == 1 and opened[0].endswith("docs/GKONSOL.md")
+    assert not home.terminal_area.is_terminal_visible()  # nothing else happens
+
+
+def test_command_reference_falls_back_to_help_in_the_terminal(home, monkeypatch):
+    monkeypatch.setattr(home_window.QDesktopServices, "openUrl", lambda url: False)  # nothing opens .md files
+    home.show()
+    home.menu_bar.command_reference.trigger()
+    assert home.terminal_area.is_terminal_visible()
+    assert "gkonsol — the GEE-Assist command line" in home.terminal.view.toPlainText()
+    home.hide()
