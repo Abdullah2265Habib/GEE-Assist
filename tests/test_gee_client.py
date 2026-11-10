@@ -385,6 +385,22 @@ def test_data_facade_without_a_gee_client():
     assert facade.validate_access() is False
     with pytest.raises(GEEError):
         facade.fetch_chunk(_chunk(), "c.tif")
+    assert [check.status for check in facade.diagnose_gee()] == ["fail"]
+    with pytest.raises(GEEError):
+        facade.begin_gee_sign_in()
+    facade.cancel_gee_sign_in()  # nothing to cancel
+
+
+def test_data_facade_delegates_the_checks_and_sign_in_to_the_gee_client():
+    client = MagicMock()
+    facade = DataFacade(gemini_client=MagicMock(), gee_client=client)
+    assert facade.diagnose_gee() is client.diagnose.return_value
+    assert facade.begin_gee_sign_in() is client.begin_sign_in.return_value
+    stop = MagicMock()
+    assert facade.complete_gee_sign_in(stop) is client.complete_sign_in.return_value
+    client.complete_sign_in.assert_called_once_with(stop)
+    facade.cancel_gee_sign_in()
+    client.cancel_sign_in.assert_called_once_with()
 
 
 @pytest.mark.parametrize("raw", [
