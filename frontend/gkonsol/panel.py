@@ -16,7 +16,7 @@ import html
 from typing import Any, Optional
 
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -44,7 +44,14 @@ SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 SPINNER_MS = 90
 BUTTON_SIZE = 26
 
-STYLESHEET = f"""
+TEXT_INDENT = 14          # the output's text and the prompt start this far from the edge
+
+
+def stylesheet(font: QFont) -> str:
+    """The panel's style. The font is named here: the app's style sheet would otherwise give the
+    terminal its proportional font, and its columns would not line up."""
+    family = f'font-family: "{font.family()}"; font-size: {font.pointSize()}pt;'
+    return f"""
 #GkonsolPanel {{ background: {colors.BACKGROUND}; border: none; }}
 #GkonsolHeader {{ background: {colors.HEADER}; border: none; border-top: 1px solid {colors.BORDER};
                   border-bottom: 1px solid {colors.BORDER}; }}
@@ -56,13 +63,14 @@ QToolButton#GkonsolButton {{ border: none; border-radius: 5px; background: trans
 QToolButton#GkonsolButton:hover {{ background: {theme.MINT}; }}
 QToolButton#GkonsolButton:pressed {{ background: {theme.BORDER}; }}
 QPlainTextEdit#GkonsolOutput {{
-    background: {colors.BACKGROUND}; color: {theme.TEXT}; border: none; padding: 6px 4px 0 12px;
+    {family} background: {colors.BACKGROUND}; color: {theme.TEXT}; border: none;
+    padding: 6px 4px 0 {TEXT_INDENT}px;
     selection-background-color: {colors.SELECTION}; selection-color: {theme.PRIMARY_TEXT};
 }}
 #GkonsolInputRow {{ background: {colors.BACKGROUND}; }}
-QLabel#GkonsolPrompt {{ background: transparent; padding: 0; }}
+QLabel#GkonsolPrompt {{ {family} background: transparent; padding: 0; }}
 QLineEdit#GkonsolInput, QLineEdit#GkonsolInput:focus, QLineEdit#GkonsolInput:hover {{
-    background: transparent; border: none; padding: 0; margin: 0; color: {theme.INK};
+    {family} background: transparent; border: none; padding: 0; margin: 0; color: {theme.INK};
     selection-background-color: {colors.SELECTION};
 }}
 """
@@ -127,7 +135,8 @@ class GkonsolPanel(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("GkonsolPanel")
-        self.setStyleSheet(STYLESHEET)
+        font = colors.monospace_font()
+        self.setStyleSheet(stylesheet(font))
         self.shell: Optional[Shell] = None
         self._panel: Optional[PanelPort] = None
         self._frame = 0
@@ -149,7 +158,7 @@ class GkonsolPanel(QFrame):
 
         # ---- output and input
         self.view = TerminalView()
-        font = colors.monospace_font()
+        self.view.document().setDocumentMargin(0)  # the text starts where the prompt does
         self.prompt = QLabel(objectName="GkonsolPrompt")
         self.prompt.setFont(font)
         self.prompt.setTextFormat(Qt.TextFormat.RichText)
@@ -158,7 +167,7 @@ class GkonsolPanel(QFrame):
         input_row = QWidget(objectName="GkonsolInputRow")
         input_row.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         line = QHBoxLayout(input_row)
-        line.setContentsMargins(12, 2, 12, 8)
+        line.setContentsMargins(TEXT_INDENT, 0, 12, 8)
         line.setSpacing(0)
         line.addWidget(self.prompt)
         line.addWidget(self.input, 1)
