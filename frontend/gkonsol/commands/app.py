@@ -83,22 +83,23 @@ def _theme(ctx: Context, args: Args) -> Generator:
 
 
 def _panel(ctx: Context, args: Args) -> None:
-    ctx.out.pairs([("Height", f"{ctx.panel.height()} px"), ("Maximised", "yes" if ctx.panel.is_maximized() else "no")])
+    ctx.out.pairs([("Height", f"{ctx.panel.terminal_height()} px"),
+                   ("Maximised", "yes" if ctx.panel.is_terminal_maximized() else "no")])
     ctx.out.muted("Drag the line above the terminal to resize it, or: panel max | panel restore | panel height <PX>")
 
 
 def _panel_max(ctx: Context, args: Args) -> None:
-    ctx.panel.set_maximized(True)
+    ctx.panel.set_terminal_maximized(True)
 
 
 def _panel_restore(ctx: Context, args: Args) -> None:
-    ctx.panel.set_maximized(False)
+    ctx.panel.set_terminal_maximized(False)
 
 
 def _panel_height(ctx: Context, args: Args) -> None:
     pixels = to_int(args.words[0].lower().removesuffix("px"), "The height (pixels)", MIN_PANEL_HEIGHT, 4000)
-    ctx.panel.set_height(pixels)
-    ctx.out.muted(f"The terminal is {ctx.panel.height()} px high.")
+    ctx.panel.set_terminal_height(pixels)
+    ctx.out.muted(f"The terminal is {ctx.panel.terminal_height()} px high.")
 
 
 # ----------------------------------------------------------------------------- settings

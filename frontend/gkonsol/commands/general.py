@@ -95,7 +95,7 @@ def _package_version(name: str) -> str:
 
 
 def _exit(ctx: Context, args: Args) -> None:
-    ctx.panel.close()
+    ctx.panel.hide_terminal()
 
 
 def register(registry: Registry) -> None:

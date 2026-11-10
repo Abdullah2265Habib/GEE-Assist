@@ -114,19 +114,19 @@ class FakePanel:
     pixels: int = 280
     closed: bool = False
 
-    def is_maximized(self):
+    def is_terminal_maximized(self):
         return self.maximized
 
-    def set_maximized(self, on):
+    def set_terminal_maximized(self, on):
         self.maximized = on
 
-    def height(self):
+    def terminal_height(self):
         return self.pixels
 
-    def set_height(self, pixels):
+    def set_terminal_height(self, pixels):
         self.pixels = pixels
 
-    def close(self):
+    def hide_terminal(self):
         self.closed = True
 
 
