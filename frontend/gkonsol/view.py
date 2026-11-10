@@ -19,6 +19,7 @@ from frontend.gkonsol.text import Line
 
 MAX_LINES = 5000
 MIN_COLUMNS = 20
+DEFAULT_COLUMNS = 100  # until the view is first shown
 FIT_SLACK = 4  # pixels: a view exactly as tall as its lines would still show a scroll bar
 
 
@@ -41,6 +42,7 @@ class TerminalView(QPlainTextEdit):
         self._formats = colors.char_formats()
         self._empty = True          # no line written yet: the document's one block is unused
         self._live: list[Line] = []  # what the live region shows
+        self._columns = DEFAULT_COLUMNS
         self._scroll_later = QTimer(self)  # owned by the view: it never fires after the view is gone
         self._scroll_later.setSingleShot(True)
         self._scroll_later.setInterval(0)
@@ -49,8 +51,11 @@ class TerminalView(QPlainTextEdit):
     # ------------------------------------------------------------- Sink
     @property
     def columns(self) -> int:
-        advance = max(1, self.fontMetrics().horizontalAdvance("M"))
-        return max(MIN_COLUMNS, self.viewport().width() // advance - 1)
+        """Characters that fit on a line. While the view is hidden, as many as when it was last shown."""
+        if self.isVisible():
+            advance = max(1, self.fontMetrics().horizontalAdvance("M"))
+            self._columns = max(MIN_COLUMNS, self.viewport().width() // advance - 1)
+        return self._columns
 
     def write(self, lines: list[Line]) -> None:
         if not lines:
