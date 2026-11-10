@@ -8,6 +8,8 @@ follow light and dark themes.
   tray and comes back in from the top (it wraps around).
 * ``WritingIcon``: a sheet of paper and a pencil; animated, the pencil writes the
   lines on the paper one after another.
+* ``TerminalIcon``: a terminal window with a prompt; animated, characters are typed
+  after the prompt while the cursor blinks.
 """
 
 from __future__ import annotations
@@ -152,3 +154,56 @@ class WritingIcon(SideIcon):
         painter.setBrush(QColor(theme.WHITE))
         painter.drawPath(point)
         painter.restore()
+
+
+class TerminalIcon(SideIcon):
+    period_ms = 1600
+    CHARACTERS = 3   # typed after the prompt in one loop
+    BLINKS = 4       # times the cursor blinks in one loop
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.4, s * 0.075)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # The window.
+        window = QRectF(rect.left() + s * 0.06, rect.top() + s * 0.14, s * 0.88, s * 0.72)
+        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(window, s * 0.1, s * 0.1)
+
+        # The prompt: ">".
+        left, middle = window.left() + s * 0.14, window.center().y()
+        prompt = QPainterPath(QPointF(left, middle - s * 0.12))
+        prompt.lineTo(left + s * 0.12, middle)
+        prompt.lineTo(left, middle + s * 0.12)
+        painter.setPen(QPen(QColor(theme.LEAF), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.drawPath(prompt)
+
+        # What is typed (short strokes), then the cursor: "_".
+        baseline = middle + s * 0.12
+        x = left + s * 0.22
+        step = s * 0.13
+        painter.setPen(QPen(QColor(theme.MUTED), line_width * 0.9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        for _ in range(self.typed(t)):
+            painter.drawLine(QPointF(x, baseline - s * 0.05), QPointF(x + s * 0.06, baseline - s * 0.05))
+            x += step
+        if self.cursor_visible(t):
+            painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.drawLine(QPointF(x, baseline), QPointF(x + s * 0.12, baseline))
+        painter.restore()
+
+    @classmethod
+    def typed(cls, t: float | None) -> int:
+        """Characters typed at moment ``t``: none at rest, then one more each step of the loop."""
+        if t is None:
+            return 0
+        return min(cls.CHARACTERS, int(t * (cls.CHARACTERS + 1)))
+
+    @classmethod
+    def cursor_visible(cls, t: float | None) -> bool:
+        """At rest the cursor shows; animated it blinks."""
+        return t is None or int(t * cls.BLINKS * 2) % 2 == 0

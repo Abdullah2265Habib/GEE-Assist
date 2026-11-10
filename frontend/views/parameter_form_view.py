@@ -516,6 +516,13 @@ class ParameterFormView(QWidget):
         if not path:  # 6c: user cancelled
             return
         try:
+            self.import_geojson(path)
+        except GeeAssistError:
+            pass  # shown under the area
+
+    def import_geojson(self, path: str) -> None:
+        """UC-04: read a GeoJSON file into the form. Raises the import error after showing it."""
+        try:
             aoi = self._facade.import_aoi(path)
         except GeeAssistError as exc:  # 6a / 6b
             self._imported_aoi = ""
@@ -523,16 +530,21 @@ class ParameterFormView(QWidget):
             self.map_widget.show_geojson("")
             self._set_field_error("aoi", str(exc))
             self._update_estimate()
-            return
+            raise
+        self.set_imported_area(aoi, Path(path).name)
 
+    def set_imported_area(self, aoi: str, name: str) -> None:
+        """Show ``aoi`` (GeoJSON) as the imported file's area and switch to "GeoJSON file"."""
         self._imported_aoi = aoi
-        self._imported_name = Path(path).name
+        self._imported_name = name
         geometry = json.loads(aoi)
         min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
         self.aoi_file_label.setText(
             f"<b>{self._imported_name}</b> · {geometry['type']}<br>"
             f"Extent: lon {min_lon:.4f} → {max_lon:.4f}, lat {min_lat:.4f} → {max_lat:.4f}"
         )
+        self.aoi_file_toggle.setChecked(True)
+        self._on_aoi_mode_changed(AOI_FILE)
         self.map_widget.show_geojson(aoi)
         self._set_field_error("aoi", "")
         self._update_estimate()
@@ -692,6 +704,67 @@ class ParameterFormView(QWidget):
 
         return filled
 
+    # --------------------------------------------- setting fields (gkonsol's "form set")
+    # The values are checked by the caller; these put them in the fields as the user would.
+    def set_dataset(self, key: str) -> None:
+        index = self.dataset_combo.findData(key)
+        if index < 0:
+            raise ValueError(f"Unknown dataset {key!r}")
+        self.dataset_combo.setCurrentIndex(index)
+        self._on_dataset_changed()  # also when it was already chosen: its defaults come back
+
+    def set_bands(self, bands: list[str]) -> None:
+        self.bands_combo.set_checked(bands)  # the size estimate follows
+
+    def set_scale(self, metres: int) -> None:
+        self.scale_spin.setValue(metres)
+
+    def set_cloud_cover(self, percent: int) -> None:
+        self.cloud_spin.setValue(percent)
+
+    def set_composite(self, method: str) -> None:
+        self.composite_combo.setCurrentText(method)
+
+    def set_dates(self, start, end) -> None:
+        self.end_date_edit.setDate(_qdate(end))
+        self.start_date_edit.setDate(_qdate(start))
+        self._set_field_error("dates", "")
+
+    def set_drawn_area(self, aoi: str, name: str) -> None:
+        """Show ``aoi`` (GeoJSON) as the area drawn on the map, and switch to "Draw on map"."""
+        geometry = json.loads(aoi)
+        self.aoi_draw_toggle.setChecked(True)
+        self._on_aoi_mode_changed(AOI_DRAW)
+        self._set_drawn_shape(geometry, name, f"<b>{name}</b> · set in gkonsol.")
+        min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
+        self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+
+    def clear_area(self) -> None:
+        self._imported_aoi = ""
+        self._imported_name = ""
+        self.aoi_file_label.setText(NO_FILE_TEXT)
+        self.map_widget.show_geojson("")
+        self._clear_drawn_shape()
+        self.map_widget.clear_shape()
+
+    def set_crs(self, code: str) -> None:
+        index = self.crs_combo.findData(code)
+        if index < 0:
+            raise ValueError(f"Unknown projection {code!r}")
+        self.crs_combo.setCurrentIndex(index)
+
+    def set_output_dir(self, folder: str) -> None:
+        self.output_dir_edit.setText(folder)
+        self._set_field_error("output_dir", "")
+
+    def set_analysis(self, analysis_type: str, processes: list[str]) -> None:
+        index = self.analysis_combo.findData(analysis_type) if analysis_type else 0
+        if index < 0:
+            raise ValueError(f"Unknown analysis {analysis_type!r}")
+        self.analysis_combo.setCurrentIndex(index)
+        self._on_analysis_changed()
+        self.processes_grid.set_checked(processes)
+
     # ---------------------------------------------------------------- output
     def _on_browse_output(self) -> None:
         start = self.output_dir_edit.text().strip() or str(DEFAULT_DOWNLOAD_DIR)
@@ -751,16 +824,24 @@ class ParameterFormView(QWidget):
         )
 
     def _on_submit(self) -> None:
+        try:
+            self.submit()
+        except GeeAssistError:
+            pass  # shown in the status banner
+
+    def submit(self) -> ValidationDTO:
+        """Validate the form and keep it when valid (Submit Parameters). Errors show in the form too."""
         form = self.collect_form()
         try:
             result = self._facade.submit_form(form)
         except GeeAssistError as exc:
             self.status_banner.show_error(str(exc))
-            return
+            raise
 
         self._show_validation(result)
         if result.is_valid:
             self.request_kept.emit(form)
+        return result
 
     def _show_validation(self, result: ValidationDTO) -> None:
         for key in self._error_labels:

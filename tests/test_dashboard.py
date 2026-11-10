@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton  # no
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
+from frontend.gkonsol.history import GkonsolStore  # noqa: E402
 from frontend.views import home_window  # noqa: E402
 from frontend.views.home_window import HomeWindow  # noqa: E402
 
@@ -38,13 +39,17 @@ def _user(role: str = "user") -> UserDTO:
 
 
 @pytest.fixture
-def home(app, monkeypatch):
+def home(app, monkeypatch, tmp_path):
     monkeypatch.setattr(home_window, "MainWindow", StubQueryWorkspace)
+    # The terminal keeps its history and height in a file of the test's own.
+    monkeypatch.setattr(home_window, "GkonsolStore", lambda: GkonsolStore(tmp_path / "gkonsol.json"))
     facade = MagicMock(spec=IBusinessFacade)
     facade.list_downloads.return_value = []
     facade.get_chunk_size_mb.return_value = 500
+    facade.get_current_user.return_value = _user()
     window = HomeWindow(facade, _user())
     yield window
+    window.terminal.shutdown()
     window.deleteLater()
 
 
@@ -313,3 +318,84 @@ def test_side_bar_offers_query_input_and_downloads_with_animated_icons(home):
     home.downloads_button.click()
     assert home.current_page() is home.downloads
     assert not home.query_input_button.isHidden() and home.downloads_button.isHidden()
+
+
+# ------------------------------------------------------------------ terminal (gkonsol)
+def _prompt_text(home) -> str:
+    from PyQt6.QtGui import QTextDocument
+
+    document = QTextDocument()
+    document.setHtml(home.terminal.prompt.text())
+    return document.toPlainText().replace("\xa0", " ")
+
+
+def test_the_terminal_starts_hidden_below_the_pages(home):
+    assert home.terminal_area.widget(0) is home.pages and home.terminal_area.widget(1) is home.terminal
+    assert not home.terminal_area.is_terminal_visible()
+    assert not home.terminal_button.isChecked() and not home.menu_bar.toggle_terminal.isChecked()
+
+
+def test_the_terminal_is_in_the_side_bar_with_an_animated_icon(home):
+    from frontend.widgets.side_icons import TerminalIcon
+
+    assert home.terminal_button.parent() is home.side_bar
+    assert isinstance(home.terminal_button.icon_drawing, TerminalIcon)
+    home.side_bar.set_expanded(True, animate=False)
+    assert home.terminal_button.text() == "Terminal"
+
+
+def test_the_side_bar_button_opens_and_closes_the_terminal(home):
+    home.show()
+    home.terminal_button.click()
+    assert home.terminal_area.is_terminal_visible()
+    assert home.terminal_button.isChecked() and home.menu_bar.toggle_terminal.isChecked()
+    home.terminal_button.click()
+    assert not home.terminal_area.is_terminal_visible()
+    assert not home.terminal_button.isChecked() and not home.menu_bar.toggle_terminal.isChecked()
+    home.hide()
+
+
+def test_view_menu_terminal_opens_and_closes_it(home):
+    home.show()
+    home.menu_bar.toggle_terminal.trigger()
+    assert home.terminal_area.is_terminal_visible() and home.terminal_button.isChecked()
+    home.menu_bar.toggle_terminal.trigger()
+    assert not home.terminal_area.is_terminal_visible() and not home.terminal_button.isChecked()
+    home.hide()
+
+
+def test_terminal_commands_drive_the_window(home):
+    home.terminal.shell.submit("open downloads")
+    assert home.current_page() is home.downloads
+    assert _prompt_text(home) == "ayesha@gkonsol ~/downloads $ "
+    home.terminal.shell.submit("sidebar on")
+    assert home.side_bar.is_expanded()
+    home.terminal.shell.submit("open dashboard")
+    assert home.current_page() is home.dashboard and _prompt_text(home) == "ayesha@gkonsol ~ $ "
+
+
+def test_the_prompt_follows_pages_opened_with_the_mouse(home):
+    home.show_account()
+    assert _prompt_text(home) == "ayesha@gkonsol ~/account $ "
+
+
+def test_signing_out_from_the_terminal(home):
+    messages = []
+    home.signed_out.connect(messages.append)
+    home.terminal.shell.submit("signout -y")
+    assert messages == ["You have been signed out."]
+
+
+def test_exit_hides_the_terminal(home):
+    home.show()
+    home.toggle_terminal()
+    home.terminal.shell.submit("exit")
+    assert not home.terminal_area.is_terminal_visible() and not home.terminal_button.isChecked()
+    home.hide()
+
+
+def test_closing_the_window_stops_a_running_command(home):
+    home.terminal.shell.submit("download speed")  # runs until Ctrl+C
+    assert home.terminal.shell.running is not None
+    home.close()
+    assert home.terminal.shell.running is None

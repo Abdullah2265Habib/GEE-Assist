@@ -4,12 +4,15 @@ A menu bar along the top (File, Edit, View, Options, Help) over a side bar on th
 left (logo, navigation and the signed-in user) next to four pages: the dashboard (start page), the query-input workspace, downloads and the
 account card. Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
+
+Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
+side bar's Terminal button or View → Terminal (Ctrl+`), and as tall as the user drags it.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QMouseEvent
+from PyQt6.QtCore import QPoint, Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -33,10 +36,14 @@ from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
+from frontend.gkonsol.form_port import WidgetForm
+from frontend.gkonsol.history import GkonsolStore, History
+from frontend.gkonsol.panel import GkonsolPanel, TerminalArea
+from frontend.gkonsol.ports import MemoryForm
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
-from frontend.widgets.side_icons import DownloadIcon, WritingIcon
+from frontend.widgets.side_icons import DownloadIcon, TerminalIcon, WritingIcon
 
 PAGE_BACKGROUND = (
     "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
@@ -91,6 +98,55 @@ class ProfileButton(QFrame):
         super().mouseReleaseEvent(event)
 
 
+class TerminalApp:
+    """What gkonsol's commands can do in the signed-in window (its ``AppPort``)."""
+
+    def __init__(self, window: "HomeWindow"):
+        self._window = window
+
+    def current_page(self) -> str:
+        window = self._window
+        pages = {window.dashboard: "dashboard", window.query_input: "query", window.downloads: "downloads",
+                 window._account_page: "account"}
+        return pages.get(window.current_page(), "dashboard")
+
+    def show_page(self, page: str) -> None:
+        window = self._window
+        {"dashboard": window.show_dashboard, "query": window.show_query_input, "downloads": window.show_downloads,
+         "account": window.show_account}[page]()
+
+    def sign_out(self) -> None:
+        self._window.sign_out()
+
+    def is_side_bar_expanded(self) -> bool:
+        return self._window.side_bar.is_expanded()
+
+    def set_side_bar_expanded(self, expanded: bool) -> None:
+        self._window.side_bar.set_expanded(expanded)
+
+    def is_full_screen(self) -> bool:
+        return self._window.isFullScreen()
+
+    def set_full_screen(self, on: bool) -> None:
+        self._window.set_full_screen(on)
+
+    def restart_with_theme(self, theme_name: str) -> None:
+        appearance.save_theme(theme_name)  # the terminal has asked already
+        restart_app()
+
+    def open_path(self, path: str) -> bool:
+        return QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def open_url(self, url: str) -> bool:
+        return QDesktopServices.openUrl(QUrl(url))
+
+    def open_user_admin(self) -> None:
+        self._window.open_user_admin()
+
+    def quit(self) -> None:
+        self._window.exit_app()
+
+
 class HomeWindow(QMainWindow):
     signed_out = pyqtSignal(str)  # message for the sign-in screen
 
@@ -111,6 +167,9 @@ class HomeWindow(QMainWindow):
         self.back_button.setToolTip("Back to the dashboard")
         self.query_input_button = self.side_bar.add_button("Query Input", "Q", icon=WritingIcon())
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
+        self.terminal_button = self.side_bar.add_button("Terminal", "T", icon=TerminalIcon())
+        self.terminal_button.setCheckable(True)  # lit while the terminal is open
+        self.terminal_button.setToolTip("Terminal: gkonsol, the GEE-Assist command line (Ctrl+`)")
         self.manage_users = self.side_bar.add_button("Manage users", "M")
         self.manage_users.setToolTip("Administrators: view accounts, change roles, enable or disable users")
         self.profile = ProfileButton()
@@ -159,12 +218,20 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(account_page)
         self._account_page = account_page
 
+        # ---- terminal (gkonsol) under the pages
+        store = GkonsolStore()
+        self.terminal = GkonsolPanel()
+        self.terminal_area = TerminalArea(self.pages, self.terminal, store)
+        form_view = getattr(self.query_input, "form_view", None)
+        form = WidgetForm(form_view) if form_view is not None else MemoryForm(facade)
+        self.terminal.start(facade, TerminalApp(self), form, self.terminal_area, History(store))
+
         root = QWidget()
         layout = QHBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.side_bar)
-        layout.addWidget(self.pages, 1)
+        layout.addWidget(self.terminal_area, 1)
         self.setCentralWidget(root)
 
         self.sign_out_action.triggered.connect(self.sign_out)
@@ -180,6 +247,11 @@ class HomeWindow(QMainWindow):
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
+        self.terminal_button.clicked.connect(self.toggle_terminal)
+        self.terminal_area.visibility_changed.connect(self._terminal_shown)
+        app = QApplication.instance()
+        if app is not None:  # a command still running when the app quits is stopped first
+            app.aboutToQuit.connect(self.terminal.shutdown)
         self.query_input.download_requested.connect(self.start_download)
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
@@ -251,6 +323,19 @@ class HomeWindow(QMainWindow):
         self.side_bar.show_back(page is not self.dashboard)  # nowhere to go back to on the dashboard
         self.query_input_button.setVisible(page is not self.query_input)
         self.downloads_button.setVisible(page is not self.downloads)
+        self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
+
+    # ------------------------------------------------------------- terminal
+    def toggle_terminal(self) -> None:
+        self.terminal_area.toggle_terminal()
+
+    def _terminal_shown(self, shown: bool) -> None:
+        self.terminal_button.setChecked(shown)
+        self.menu_bar.toggle_terminal.setChecked(shown)
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt API)
+        self.terminal.shutdown()  # e.g. an Earth Engine sign-in stops waiting for the browser
+        super().closeEvent(event)
 
     # ------------------------------------------------------------- account
     def show_account_menu(self) -> None:
@@ -271,6 +356,9 @@ class HomeWindow(QMainWindow):
         bar.view_account.triggered.connect(self.show_account)
         bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
         bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
+        bar.toggle_terminal.triggered.connect(
+            lambda shown: self.terminal_area.show_terminal() if shown else self.terminal_area.hide_terminal()
+        )
         self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
         bar.full_screen.triggered.connect(self.set_full_screen)
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)

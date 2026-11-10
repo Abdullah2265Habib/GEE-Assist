@@ -101,9 +101,6 @@ class FakeApp:
     def open_user_admin(self):
         self.calls.append(("user_admin",))
 
-    def kept_requests_changed(self):
-        self.calls.append(("kept_requests_changed",))
-
     def quit(self):
         self.calls.append(("quit",))
 
