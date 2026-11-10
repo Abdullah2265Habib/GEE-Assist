@@ -459,3 +459,20 @@ def test_terminal_menu_commands_wait_for_a_question_to_be_answered(home):
     home.menu_bar.terminal_commands["help"].trigger()
     assert home.terminal.shell.runner.asking is not None and signed_out == []
     assert "'help' did not run" in home.terminal.view.toPlainText()
+
+
+def test_command_reference_opens_the_document(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home_window.QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True)
+    home.menu_bar.command_reference.trigger()
+    assert len(opened) == 1 and opened[0].endswith("docs/GKONSOL.md")
+    assert not home.terminal_area.is_terminal_visible()  # nothing else happens
+
+
+def test_command_reference_falls_back_to_help_in_the_terminal(home, monkeypatch):
+    monkeypatch.setattr(home_window.QDesktopServices, "openUrl", lambda url: False)  # nothing opens .md files
+    home.show()
+    home.menu_bar.command_reference.trigger()
+    assert home.terminal_area.is_terminal_visible()
+    assert "gkonsol — the GEE-Assist command line" in home.terminal.view.toPlainText()
+    home.hide()
