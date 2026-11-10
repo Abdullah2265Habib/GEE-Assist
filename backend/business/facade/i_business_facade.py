@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from backend.dto import DownloadJobDTO, FormDTO, ValidationDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
     UserDTO,
@@ -35,6 +36,9 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def reload_current_user(self) -> UserDTO: ...
+
+    @abstractmethod
+    def get_session_info(self) -> SessionInfoDTO: ...
 
     @abstractmethod
     def log_out(self) -> None: ...

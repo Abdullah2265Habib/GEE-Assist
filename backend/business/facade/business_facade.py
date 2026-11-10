@@ -7,6 +7,7 @@ from backend.business.user.i_user_service import IUserService
 from backend.dto import DownloadJobDTO, FormDTO, ValidationDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
     UserDTO,
@@ -47,6 +48,9 @@ class BusinessFacade(IBusinessFacade):
 
     def reload_current_user(self) -> UserDTO:
         return self._user_service.reload_current_user()
+
+    def get_session_info(self) -> SessionInfoDTO:
+        return self._user_service.get_session_info()
 
     def log_out(self) -> None:
         self._user_service.log_out()
