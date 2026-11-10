@@ -34,3 +34,13 @@ def test_every_alias_is_listed(command):
 def test_the_doc_says_the_commands_only_work_inside_gee_assist():
     assert "gkonsol commands work only inside GEE-Assist" in DOC
     assert "PowerShell" in DOC and "Windows Terminal" in DOC
+
+
+def test_every_terminal_menu_item_is_described():
+    from frontend.widgets.menu_bar import TERMINAL_COMMANDS
+
+    for items in TERMINAL_COMMANDS:
+        for label, command in items:
+            assert f"**{label.replace('&', '')}** | Runs `{command}`" in DOC, label
+    for label in ("Show terminal", "Maximise terminal", "Clear terminal", "Stop running command", "Command reference"):
+        assert f"| **{label}**" in DOC, label
