@@ -153,7 +153,7 @@ def add_soft_shadow(widget: QWidget, blur: int = 48, alpha: int = 34, y_offset: 
     shadow = QGraphicsDropShadowEffect(widget)
     shadow.setBlurRadius(blur)
     shadow.setOffset(0, y_offset)
-    shadow.setColor(theme.color("#1E5A57", alpha))
+    shadow.setColor(theme.color(theme.SHADOW, alpha))
     widget.setGraphicsEffect(shadow)
 
 

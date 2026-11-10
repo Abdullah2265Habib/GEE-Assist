@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, TypeVar
 
 from backend.auth_exceptions import AuthError, SessionExpiredError
@@ -12,6 +13,7 @@ from backend.data.clients.i_auth_api_client import IAuthApiClient
 from backend.data.session_store import ISessionStore
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
     UserDTO,
@@ -95,6 +97,25 @@ class UserService(IUserService):
         user = UserDTO.from_api(self._authorized(self._api.me))
         self._user = user
         return user
+
+    def get_session_info(self) -> SessionInfoDTO:
+        with self._lock:
+            signed_in = self._user is not None
+            remembered = self._remember
+            has_refresh_token = bool(self._refresh_token)
+            expires_in = max(0.0, self._access_expires_at - self._clock()) if self._access_token else None
+        saved_until = None
+        if signed_in and remembered:
+            expires_at = self._store.load_expiry()
+            if expires_at is not None:
+                saved_until = datetime.fromtimestamp(expires_at).astimezone()
+        return SessionInfoDTO(
+            signed_in=signed_in,
+            remembered=remembered,
+            saved_until=saved_until,
+            access_expires_in=expires_in,
+            has_refresh_token=has_refresh_token,
+        )
 
     def log_out(self) -> None:
         with self._lock:

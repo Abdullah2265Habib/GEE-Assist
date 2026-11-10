@@ -92,6 +92,40 @@ def test_remember_me_saves_refresh_token(setup):
     assert store.load_refresh_token() == "refresh1"
 
 
+def test_session_info_before_signing_in(setup):
+    service, *_ = setup
+    info = service.get_session_info()
+    assert not info.signed_in and not info.remembered
+    assert info.saved_until is None and info.access_expires_in is None and not info.has_refresh_token
+
+
+def test_session_info_of_a_session_that_is_not_kept(setup):
+    service, _, _, clock = setup
+    service.log_in("abdullah", "secret123")
+    clock.now += 100
+    info = service.get_session_info()
+    assert info.signed_in and not info.remembered and info.saved_until is None
+    assert info.has_refresh_token
+    assert info.access_expires_in == 1800 - 30 - 100  # renewed 30 s before it runs out
+
+
+def test_session_info_of_a_kept_session_shows_when_it_runs_out():
+    api, store, wall = FakeApi(), MemorySessionStore(), lambda: 1_700_000_000.0
+    service = UserService(api, store, Clock(), session_duration=7 * 86400, wall_clock=wall)
+    service.log_in("abdullah", "secret123", remember=True)
+    info = service.get_session_info()
+    assert info.remembered
+    assert info.saved_until is not None and info.saved_until.timestamp() == 1_700_000_000.0 + 7 * 86400
+
+
+def test_session_info_after_signing_out(setup):
+    service, *_ = setup
+    service.log_in("abdullah", "secret123", remember=True)
+    service.log_out()
+    info = service.get_session_info()
+    assert not info.signed_in and not info.remembered and info.access_expires_in is None
+
+
 def test_expired_access_token_is_refreshed_before_the_call(setup):
     service, api, _, clock = setup
     service.log_in("abdullah", "secret123")

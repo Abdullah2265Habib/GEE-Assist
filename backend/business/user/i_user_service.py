@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
     UserDTO,
@@ -37,6 +38,10 @@ class IUserService(ABC):
 
     @abstractmethod
     def reload_current_user(self) -> UserDTO: ...
+
+    @abstractmethod
+    def get_session_info(self) -> SessionInfoDTO:
+        """The current session: whether it is saved, until when, and when the access token renews."""
 
     @abstractmethod
     def log_out(self) -> None: ...

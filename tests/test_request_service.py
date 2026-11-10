@@ -35,6 +35,18 @@ class FakeDataFacade(IDataFacade):
     def validate_access(self) -> bool:
         return False
 
+    def diagnose_gee(self):  # not used here
+        return []
+
+    def begin_gee_sign_in(self) -> str:  # not used here
+        raise NotImplementedError
+
+    def complete_gee_sign_in(self, should_stop=None) -> str:  # not used here
+        raise NotImplementedError
+
+    def cancel_gee_sign_in(self) -> None:  # not used here
+        pass
+
 
 # ------------------------------------------------------------------ submit_query
 RULES_ONLY = QueryEntityExtractor(use_spacy=False, today=TODAY)  # deterministic, no spaCy model needed

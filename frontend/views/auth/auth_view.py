@@ -40,6 +40,9 @@ class AuthView(QWidget):
         self._restoring = False
         self._pending_user: UserDTO | None = None
         self.setObjectName("AuthView")
+        # Paint the background itself: otherwise the window behind shows through around the card,
+        # e.g. under the logo at the top (white in the dark themes).
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"#AuthView {{ background: {theme.WHITE}; }}")
 
         # ---- pages

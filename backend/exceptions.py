@@ -26,3 +26,12 @@ class GEESetupError(GEEError):
 
     Retrying does not help, so downloads stop at once with the message.
     """
+
+
+class GEERequestTooHeavyError(GEEError):
+    """Earth Engine ran out of memory or time computing a request.
+
+    Sending the same request again does not help; a smaller one may. When even the
+    smallest request fails, downloads stop at once so the user can make the request
+    lighter (shorter date range, mosaic composite).
+    """

@@ -5,7 +5,8 @@ Sections:
   PAUSED             paused or failed downloads (Start resumes, Retry retries failed chunks)
   COMPLETED HISTORY  finished downloads; the green button opens the dataset folder
 
-The page polls the facade twice a second while it is visible.
+The page polls the facade twice a second, also while it is hidden, so the speed graph
+keeps a continuous history (like Task Manager).
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from PyQt6.QtWidgets import (
 from backend.business.facade import IBusinessFacade
 from backend.config.download_settings import MAX_CHUNK_SIZE_MB, MIN_CHUNK_SIZE_MB
 from backend.dto import DownloadJobDTO, FormDTO
-from backend.dto.download_dto import CHUNK_MERGED, JOB_COMPLETED, JOB_FAILED, JOB_PAUSED, JOB_QUEUED, JOB_RUNNING
+from backend.dto.download_dto import JOB_COMPLETED, JOB_FAILED, JOB_PAUSED, JOB_QUEUED, JOB_RUNNING
 from backend.exceptions import GeeAssistError
 from frontend import form_theme, theme
 from frontend.download_format import format_size, format_speed
@@ -38,6 +39,7 @@ from frontend.widgets.speed_chart import SpeedChart
 from frontend.workers.task_worker import run_task
 
 REFRESH_MS = 500
+NONE = "–"   # shown when no download is running
 
 STYLESHEET = f"""
 #DownloadPage {{ background: transparent; }}
@@ -64,16 +66,16 @@ QLabel#JobTitle {{ color: {theme.INK}; font-size: 11pt; }}
 QLabel#JobStatus {{ color: {theme.INK}; font-weight: 600; letter-spacing: 0.4px; }}
 QLabel#JobEta, QLabel#JobSize, QLabel#JobWhen {{ color: {theme.TEXT}; }}
 QLabel#JobError {{ color: {theme.ERROR}; font-size: 9pt; }}
-QProgressBar#JobProgress {{ background: #E4EEEB; border: none; border-radius: 4px; }}
+QProgressBar#JobProgress {{ background: {theme.PROGRESS_TRACK}; border: none; border-radius: 4px; }}
 QProgressBar#JobProgress::chunk {{
     border-radius: 4px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});
 }}
-QProgressBar#JobProgress[state="paused"]::chunk {{ background: #9DB8B2; }}
-QProgressBar#JobProgress[state="failed"]::chunk {{ background: #E3A79F; }}
+QProgressBar#JobProgress[state="paused"]::chunk {{ background: {theme.PROGRESS_PAUSED}; }}
+QProgressBar#JobProgress[state="failed"]::chunk {{ background: {theme.PROGRESS_FAILED}; }}
 QPushButton#OpenButton {{
     color: {theme.WHITE}; font-size: 11pt; border: none; border-radius: 6px; padding: 0;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4CB98E, stop:1 {theme.LEAF});
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.OPEN_BUTTON_TOP}, stop:1 {theme.LEAF});
 }}
 QPushButton#OpenButton:hover {{ background: {theme.LEAF_DARK}; }}
 QFrame#DownloadFooter {{ background: {theme.WHITE}; border-top: 1px solid {theme.BORDER}; }}
@@ -131,6 +133,7 @@ class DownloadView(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(REFRESH_MS)
         self._timer.timeout.connect(self.refresh)
+        self._timer.start()
 
     # ------------------------------------------------------------- building
     def _build_stats(self) -> QFrame:
@@ -169,7 +172,7 @@ class DownloadView(QWidget):
         layout.setSpacing(20)
         layout.addWidget(self.chart, 3)
         layout.addLayout(figures, 2)
-        self.change_chunk.clicked.connect(self._change_chunk_size)
+        self.change_chunk.clicked.connect(self.change_chunk_size)
         return card
 
     def _build_footer(self) -> QFrame:
@@ -186,12 +189,7 @@ class DownloadView(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().showEvent(event)
         self.refresh()
-        self._timer.start()
         self.check_connection()  # again on every visit, so fixing the setup shows up
-
-    def hideEvent(self, event) -> None:  # noqa: N802 (Qt API)
-        super().hideEvent(event)
-        self._timer.stop()
 
     # ------------------------------------------------------------- actions
     def start(self, form: FormDTO) -> None:
@@ -259,7 +257,7 @@ class DownloadView(QWidget):
     def _open_job(self, job: DownloadJobDTO) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(job.folder))
 
-    def _change_chunk_size(self) -> None:
+    def change_chunk_size(self) -> None:
         current = self._facade.get_chunk_size_mb()
         size, accepted = QInputDialog.getInt(
             self, "Chunk size", "Chunk size for new downloads (MB):", current, MIN_CHUNK_SIZE_MB, MAX_CHUNK_SIZE_MB, 50,
@@ -286,21 +284,15 @@ class DownloadView(QWidget):
     # ------------------------------------------------------------- updating
     def _update_stats(self, jobs: list[DownloadJobDTO], running: DownloadJobDTO | None) -> None:
         speed = running.speed_bps if running else 0.0
-        self.chart.add_sample(speed)
+        self.chart.add_sample(speed, running.average_speed_bps if running else 0.0)
         self._peak = max(self._peak, speed)
-        active = [job for job in jobs if job.status != JOB_COMPLETED]
-        on_disk = sum(job.dataset.size_bytes for job in jobs if job.status == JOB_COMPLETED and job.dataset)
-        on_disk += sum(
-            job.merged_bytes + sum(c.downloaded_bytes for c in job.chunks if c.status != CHUNK_MERGED)
-            for job in active
-        )
-        merge_speed = next((job.merge_speed_bps for job in reversed(jobs) if job.merge_speed_bps), 0.0)
+        merge_speed = running.merge_speed_bps if running else 0.0  # 0 while nothing is being merged
         values = {
             "CURRENT": format_speed(speed),
             "PEAK": format_speed(self._peak),
-            "DOWNLOADED": format_size(sum(job.downloaded_bytes for job in jobs)),
-            "REMAINING": format_size(sum(max(0, job.total_bytes - job.downloaded_bytes) for job in active)),
-            "DISK USAGE": format_size(on_disk),
+            "DOWNLOADED": format_size(running.received_bytes) if running else NONE,  # current download only
+            "REMAINING": format_size(max(0, running.total_bytes - running.downloaded_bytes)) if running else NONE,
+            "DISK USAGE": format_size(running.disk_bytes) if running else NONE,
             "MERGING SPEED": format_speed(merge_speed),
         }
         for name, value in values.items():
@@ -340,3 +332,4 @@ class DownloadView(QWidget):
         section, row = self._rows.pop(job_id)
         section.rows.removeWidget(row)
         row.deleteLater()
+

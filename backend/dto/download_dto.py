@@ -111,9 +111,12 @@ class DownloadJobDTO:
     total_bytes: int = 0                        # expected size of the whole dataset
     downloaded_bytes: int = 0
     merged_bytes: int = 0                       # size of the merged GeoTIFF so far
+    received_bytes: int = 0                     # bytes actually received from GEE (all attempts)
+    disk_bytes: int = 0                         # size of the job's files on disk right now
     merged_path: str = ""                       # the merged GeoTIFF so far (top chunks joined)
-    speed_bps: float = 0.0                      # current download speed, bytes / second
-    merge_speed_bps: float = 0.0                # speed of the last merge, bytes / second
+    speed_bps: float = 0.0                      # current download speed (last 2 s), bytes / second
+    average_speed_bps: float = 0.0              # average speed since the download (re)started
+    merge_speed_bps: float = 0.0                # speed of the running merge (0 when none), bytes / second
     eta_seconds: Optional[float] = None
     dataset: Optional[DatasetDTO] = None        # set once the job is completed
     error: str = ""

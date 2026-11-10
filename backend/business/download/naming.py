@@ -1,7 +1,9 @@
-"""Names of downloaded datasets: ``<satellite>_<longitude>_<latitude>``.
+"""Names of downloaded datasets: ``<satellite>_<longitude>_<latitude>_<start date>_<end date>``.
 
 The coordinates are the centre of the AOI's bounding box with 4 decimals (about
-11 m), e.g. ``Sentinel-2_73.8231_33.2334``.
+11 m); the dates are the request's date range as ``YYYY-MM-DD``,
+e.g. ``Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31``. A date the request
+does not have is left out.
 """
 
 from __future__ import annotations
@@ -20,7 +22,9 @@ def dataset_folder_name(form: FormDTO) -> str:
     satellite = (info.satellite if info and info.satellite else form.dataset) or "dataset"
     satellite = re.sub(r"[^A-Za-z0-9.-]+", "-", satellite).strip("-")
     west, south, east, north = geometry_bbox(json.loads(form.aoi))
-    return f"{satellite}_{(west + east) / 2:.4f}_{(south + north) / 2:.4f}"
+    parts = [satellite, f"{(west + east) / 2:.4f}", f"{(south + north) / 2:.4f}"]
+    parts += [day.isoformat() for day in (form.start_date, form.end_date) if day]
+    return "_".join(parts)
 
 
 def unique_folder(parent: Path, name: str) -> Path:

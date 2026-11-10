@@ -83,6 +83,16 @@ def test_invalid_form_reports_field_and_is_not_kept(overrides, field):
     assert service.get_kept_requests() == []
 
 
+def test_check_form_reports_the_same_errors_but_keeps_nothing():
+    service = RequestService()
+    assert service.check_form(valid_form()).is_valid
+    assert service.check_form(valid_form()).message == "All parameters are valid."
+    invalid = service.check_form(valid_form(bands=[], scale=0))
+    assert not invalid.is_valid and set(invalid.errors) == {"bands", "scale"}
+    assert invalid.message == "Please correct the highlighted fields."
+    assert service.get_kept_requests() == []
+
+
 def test_download_only_needs_no_analysis():
     service = RequestService()
     result = service.validate_form(valid_form(analysis_type="", processes=["NDVI"]))

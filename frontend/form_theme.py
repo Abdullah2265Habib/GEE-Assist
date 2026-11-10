@@ -12,32 +12,40 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
 
+from frontend import palette
+
 # ----------------------------------------------------------------------------- palette
-WHITE = "#FFFFFF"
-INK = "#1E3A3A"            # headings / main text: deep green-slate
-TEXT = "#34504F"
-MUTED = "#6B8582"
-SUBTLE = "#93A9A6"
-BORDER = "#D3E4DF"
-BORDER_STRONG = "#B9D3CC"
-BORDER_HOVER = "#9CC5BA"
-FIELD_BG = "#FBFDFC"
-DISABLED_BG = "#F3F6F5"
-
-LEAF = "#2E9E78"           # primary green
-LEAF_DARK = "#237D60"
-OCEAN = "#2F7FC1"          # primary blue
-OCEAN_DARK = "#24659C"
-MINT = "#EAF6F0"
-SKY = "#E6F1FA"
-FOAM = "#F4FAF8"
-PAGE_BG = "#F2F8F6"        # soft green-blue page behind the white cards
-HEADER_GREEN = "#DFF1E8"   # section header band: light sage-green ...
-HEADER_BLUE = "#DFEDF7"    # ... fading to a light sky-blue
-HEADER_LINE = "#C4E0D5"
-
-ERROR = "#C0392B"
-SUCCESS = "#23845E"
+_P = palette.ACTIVE
+WHITE = _P["WHITE"]
+INK = _P["INK"]
+TEXT = _P["TEXT"]
+MUTED = _P["MUTED"]
+SUBTLE = _P["SUBTLE"]
+BORDER = _P["BORDER"]
+BORDER_STRONG = _P["BORDER_STRONG"]
+BORDER_HOVER = _P["BORDER_HOVER"]
+FIELD_BG = _P["FIELD_BG"]
+DISABLED_BG = _P["DISABLED_BG"]
+LEAF = _P["LEAF"]
+LEAF_DARK = _P["LEAF_DARK"]
+OCEAN = _P["OCEAN"]
+OCEAN_DARK = _P["OCEAN_DARK"]
+MINT = _P["MINT"]
+SKY = _P["SKY"]
+FOAM = _P["FOAM"]
+PAGE_BG = _P["PAGE_BG"]
+HEADER_GREEN = _P["HEADER_GREEN"]
+HEADER_BLUE = _P["HEADER_BLUE"]
+HEADER_LINE = _P["HEADER_LINE"]
+ERROR = _P["ERROR"]
+SUCCESS = _P["SUCCESS"]
+ERROR_BG = _P["ERROR_BG"]
+SUCCESS_BG = _P["SUCCESS_BG"]
+INFO_BG = _P["INFO_BG"]
+ERROR_BORDER = _P["ERROR_BORDER"]
+SUCCESS_BORDER = _P["SUCCESS_BORDER"]
+INFO_BORDER = _P["INFO_BORDER"]
+ERROR_FIELD_BG = _P["ERROR_FIELD_BG"]
 
 SERIF = "Georgia"
 SANS = "Segoe UI"
@@ -57,13 +65,14 @@ def qcolor(hex_value: str, alpha: int = 255) -> QColor:
     return c
 
 
-def apply_light_mode(app: QApplication) -> None:
-    """Keep the app light even when Windows is in dark mode.
+def apply_palette(app: QApplication) -> None:
+    """Give Qt the theme's colours, whatever colour scheme Windows uses.
 
-    Fusion follows the system colour scheme, which is what turned the form dark.
+    Fusion follows the system colour scheme, which turned the light form dark: the
+    scheme is set to the theme's (light or dark) instead.
     """
     app.setStyle("Fusion")
-    app.styleHints().setColorScheme(Qt.ColorScheme.Light)
+    app.styleHints().setColorScheme(Qt.ColorScheme.Dark if palette.IS_DARK else Qt.ColorScheme.Light)
 
     p = QPalette()
     roles = {
@@ -131,9 +140,9 @@ QFrame#SectionCard QWidget {{ background: transparent; }}
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
     border-radius: 8px; padding: 7px 12px; font-size: 9.5pt;
 }}
-QLabel#ErrorBanner {{ background: #FDF1EF; color: {ERROR}; border: 1px solid #F3C9C3; }}
-QLabel#SuccessBanner {{ background: #ECF7F1; color: {SUCCESS}; border: 1px solid #BFE3D1; }}
-QLabel#InfoBanner {{ background: #EEF5FB; color: {OCEAN_DARK}; border: 1px solid #C9DFF1; }}
+QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
+QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid {SUCCESS_BORDER}; }}
+QLabel#InfoBanner {{ background: {INFO_BG}; color: {OCEAN_DARK}; border: 1px solid {INFO_BORDER}; }}
 
 /* ---- text ---- */
 QLabel {{ color: {TEXT}; background: transparent; }}
@@ -171,7 +180,7 @@ QLineEdit#PathField:focus {{ border: 1px solid {LEAF}; background: {WHITE}; }}
 QLineEdit#PathField[invalid="true"],
 QComboBox[invalid="true"], QSpinBox[invalid="true"], QDoubleSpinBox[invalid="true"],
 QDateEdit[invalid="true"], QWidget#CheckGrid[invalid="true"] {{
-    border: 1.5px solid {ERROR}; background: #FFFBFA;
+    border: 1.5px solid {ERROR}; background: {ERROR_FIELD_BG};
 }}
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {{ border-color: {BORDER_HOVER}; }}
 QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {{

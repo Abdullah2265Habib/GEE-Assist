@@ -1,11 +1,11 @@
-"""Signed-in user's account card (data from /auth/me)."""
+"""Signed-in user's account card (data from /auth/me) and the sign-up details dialog."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from backend.auth_exceptions import AuthError, SessionExpiredError
 from backend.business.facade import IBusinessFacade
@@ -21,6 +21,16 @@ def format_date(value: datetime | None) -> str:
     if value is None:
         return "—"
     return value.astimezone().strftime("%d %b %Y, %H:%M")
+
+
+def format_email(user: UserDTO) -> str:
+    if not user.email:
+        return "—"
+    return user.email + ("  ✓ verified" if user.email_verified else "  (not verified)")
+
+
+def format_provider(user: UserDTO) -> str:
+    return _PROVIDERS.get(user.auth_provider, user.auth_provider.title())
 
 
 class Avatar(QLabel):
@@ -98,12 +108,11 @@ class AccountView(QFrame):
         self.avatar.set_user(user)
         self.greeting.setText(f"Welcome, {first_name}!")
         self.summary.setText("You're signed in to GEE-Assist. Your analysis workspace will open from here.")
-        verified = "  ✓ verified" if user.email_verified else "  (not verified)"
         self._values["username"].setText(user.username)
-        self._values["email"].setText((user.email or "—") + (verified if user.email else ""))
+        self._values["email"].setText(format_email(user))
         self._values["phone"].setText(user.phone_number or "—")
         self._values["role"].setText("Administrator" if user.is_admin else "User")
-        self._values["provider"].setText(_PROVIDERS.get(user.auth_provider, user.auth_provider.title()))
+        self._values["provider"].setText(format_provider(user))
         self._values["created"].setText(format_date(user.created_at))
         self._values["last_login"].setText(format_date(user.last_login_at))
 
@@ -122,3 +131,50 @@ class AccountView(QFrame):
             self.session_expired.emit()
         else:
             self.banner.show_error(str(exc) if isinstance(exc, AuthError) else "Could not load your details.")
+
+
+class SignupDetailsDialog(QDialog):
+    """What the user gave when signing up, and when that was."""
+
+    def __init__(self, user: UserDTO, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle("Sign-up details")
+        self.setMinimumWidth(440)
+        self.setStyleSheet(f"QDialog {{ background: {theme.WHITE}; }}")
+
+        title = QLabel("Sign-up details")
+        title.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; color: {theme.INK};")
+        self.values: dict[str, QLabel] = {}
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(24)
+        grid.setVerticalSpacing(10)
+        rows = [
+            ("full_name", "Full name", user.full_name or "—"),
+            ("username", "Username", user.username),
+            ("email", "Email", format_email(user)),
+            ("phone", "Phone", user.phone_number or "—"),
+            ("provider", "Signed up with", format_provider(user)),
+            ("created", "Signed up on", format_date(user.created_at)),
+        ]
+        for row, (key, name, text) in enumerate(rows):
+            value = QLabel(text)
+            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            value.setStyleSheet(f"color: {theme.INK};")
+            grid.addWidget(QLabel(name, objectName="Muted"), row, 0)
+            grid.addWidget(value, row, 1)
+            self.values[key] = value
+        grid.setColumnStretch(1, 1)
+
+        close = QPushButton("Close", objectName="SecondaryButton")
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.clicked.connect(self.accept)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(close)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 22)
+        layout.setSpacing(16)
+        layout.addWidget(title)
+        layout.addLayout(grid)
+        layout.addLayout(buttons)

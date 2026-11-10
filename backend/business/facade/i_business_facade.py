@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Callable, Optional
 
-from backend.dto import DownloadJobDTO, FormDTO, ValidationDTO
+from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, ValidationDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
     UserDTO,
@@ -35,6 +37,9 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def reload_current_user(self) -> UserDTO: ...
+
+    @abstractmethod
+    def get_session_info(self) -> SessionInfoDTO: ...
 
     @abstractmethod
     def log_out(self) -> None: ...
@@ -75,6 +80,10 @@ class IBusinessFacade(ABC):
     def submit_form(self, form: FormDTO) -> ValidationDTO: ...
 
     @abstractmethod
+    def check_form(self, form: FormDTO) -> ValidationDTO:
+        """Validate the parameters without keeping them."""
+
+    @abstractmethod
     def import_aoi(self, file_path: str) -> str: ...
 
     @abstractmethod
@@ -110,6 +119,21 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def is_gee_available(self) -> bool: ...
+
+    @abstractmethod
+    def check_gee_setup(self) -> list[CheckDTO]:
+        """The Earth Engine set-up checked step by step: library, project, sign-in, connection, test request."""
+
+    @abstractmethod
+    def begin_gee_sign_in(self) -> str:
+        """Start signing this computer in to Earth Engine; returns the Google page to open in the browser."""
+
+    @abstractmethod
+    def complete_gee_sign_in(self, should_stop: Optional[Callable[[], bool]] = None) -> str:
+        """Wait for the browser to come back from Google; returns the file the sign-in was saved in."""
+
+    @abstractmethod
+    def cancel_gee_sign_in(self) -> None: ...
 
     @abstractmethod
     def shutdown_downloads(self) -> None:

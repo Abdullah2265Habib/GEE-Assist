@@ -21,7 +21,7 @@ QFrame#DashboardTile {{
     border: 1px solid {theme.BORDER};
     border-radius: 16px;
 }}
-QFrame#DashboardTile[enabled="false"] {{ background: #FAFCFB; }}
+QFrame#DashboardTile[enabled="false"] {{ background: {theme.TILE_DISABLED_BG}; }}
 QLabel#TileBadge {{
     color: {theme.WHITE};
     font-size: 16pt;

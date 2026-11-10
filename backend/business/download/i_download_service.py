@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Callable, Optional
 
-from backend.dto import DownloadJobDTO, FormDTO
+from backend.dto import CheckDTO, DownloadJobDTO, FormDTO
 
 
 class IDownloadService(ABC):
@@ -52,6 +53,22 @@ class IDownloadService(ABC):
     @abstractmethod
     def is_gee_available(self) -> bool:
         """True if Google Earth Engine is signed in and usable."""
+
+    @abstractmethod
+    def check_gee_setup(self) -> list[CheckDTO]:
+        """The Earth Engine set-up checked step by step (gkonsol's ``gee verify``)."""
+
+    @abstractmethod
+    def begin_gee_sign_in(self) -> str:
+        """Start signing this computer in to Earth Engine; returns the Google page to open."""
+
+    @abstractmethod
+    def complete_gee_sign_in(self, should_stop: Optional[Callable[[], bool]] = None) -> str:
+        """Wait for the browser to come back and save the sign-in; returns the credentials file."""
+
+    @abstractmethod
+    def cancel_gee_sign_in(self) -> None:
+        """Stop waiting for the Earth Engine browser sign-in."""
 
     @abstractmethod
     def shutdown(self, timeout: float = 5.0) -> None:

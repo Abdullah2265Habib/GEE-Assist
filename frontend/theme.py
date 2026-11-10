@@ -7,29 +7,55 @@ from pathlib import Path
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import QApplication
 
+from frontend import palette
+
 # ----------------------------------------------------------------------------- palette
-WHITE = "#FFFFFF"
-INK = "#1E3A3A"            # headings / main text: deep green-slate
-TEXT = "#34504F"
-MUTED = "#6B8582"
-SUBTLE = "#93A9A6"
-BORDER = "#D3E4DF"
-BORDER_STRONG = "#B9D3CC"
-FIELD_BG = "#FBFDFC"
-
-LEAF = "#2E9E78"           # primary green
-LEAF_DARK = "#237D60"
-OCEAN = "#2F7FC1"          # primary blue
-OCEAN_DARK = "#24659C"
-MINT = "#EAF6F0"
-SKY = "#E6F1FA"
-FOAM = "#F4FAF8"
-
-ERROR = "#C0392B"
-ERROR_BG = "#FDF1EF"
-SUCCESS = "#23845E"
-SUCCESS_BG = "#ECF7F1"
-INFO_BG = "#EEF5FB"
+_P = palette.ACTIVE
+WHITE = _P["WHITE"]
+INK = _P["INK"]
+TEXT = _P["TEXT"]
+MUTED = _P["MUTED"]
+SUBTLE = _P["SUBTLE"]
+BORDER = _P["BORDER"]
+BORDER_STRONG = _P["BORDER_STRONG"]
+FIELD_BG = _P["FIELD_BG"]
+LEAF = _P["LEAF"]
+LEAF_DARK = _P["LEAF_DARK"]
+OCEAN = _P["OCEAN"]
+OCEAN_DARK = _P["OCEAN_DARK"]
+MINT = _P["MINT"]
+SKY = _P["SKY"]
+FOAM = _P["FOAM"]
+ERROR = _P["ERROR"]
+ERROR_BG = _P["ERROR_BG"]
+SUCCESS = _P["SUCCESS"]
+SUCCESS_BG = _P["SUCCESS_BG"]
+INFO_BG = _P["INFO_BG"]
+ERROR_BORDER = _P["ERROR_BORDER"]
+SUCCESS_BORDER = _P["SUCCESS_BORDER"]
+INFO_BORDER = _P["INFO_BORDER"]
+ERROR_FIELD_BG = _P["ERROR_FIELD_BG"]
+BORDER_HOVER = _P["BORDER_HOVER"]
+DISABLED_BG = _P["DISABLED_BG"]
+PRIMARY_TEXT = _P["PRIMARY_TEXT"]
+PRIMARY_DISABLED_TEXT = _P["PRIMARY_DISABLED_TEXT"]
+PRIMARY_DISABLED_FROM = _P["PRIMARY_DISABLED_FROM"]
+PRIMARY_DISABLED_TO = _P["PRIMARY_DISABLED_TO"]
+OPEN_BUTTON_TOP = _P["OPEN_BUTTON_TOP"]
+PAGE_GRADIENT_TOP = _P["PAGE_GRADIENT_TOP"]
+PAGE_GRADIENT_MIDDLE = _P["PAGE_GRADIENT_MIDDLE"]
+PAGE_GRADIENT_BOTTOM = _P["PAGE_GRADIENT_BOTTOM"]
+HERO_TOP = _P["HERO_TOP"]
+HERO_MIDDLE = _P["HERO_MIDDLE"]
+HERO_BOTTOM = _P["HERO_BOTTOM"]
+TILE_DISABLED_BG = _P["TILE_DISABLED_BG"]
+PROGRESS_TRACK = _P["PROGRESS_TRACK"]
+PROGRESS_PAUSED = _P["PROGRESS_PAUSED"]
+PROGRESS_FAILED = _P["PROGRESS_FAILED"]
+TABLE_LINE = _P["TABLE_LINE"]
+CHART_GRID = _P["CHART_GRID"]
+SHADOW = _P["SHADOW"]
+SPLASH_BG = _P["SPLASH_BG"]
 
 SERIF = "Georgia"
 SANS = "Segoe UI"
@@ -74,9 +100,9 @@ QLabel#Divider {{ color: {SUBTLE}; font-size: 9pt; }}
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
     border-radius: 8px; padding: 9px 12px; font-size: 9.5pt;
 }}
-QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid #F3C9C3; }}
-QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid #BFE3D1; }}
-QLabel#InfoBanner {{ background: {INFO_BG}; color: {OCEAN_DARK}; border: 1px solid #C9DFF1; }}
+QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
+QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid {SUCCESS_BORDER}; }}
+QLabel#InfoBanner {{ background: {INFO_BG}; color: {OCEAN_DARK}; border: 1px solid {INFO_BORDER}; }}
 
 /* ---- card ---- */
 QFrame#AuthCard {{
@@ -95,10 +121,10 @@ QLineEdit {{
     color: {INK};
     selection-background-color: {OCEAN};
 }}
-QLineEdit:hover {{ border-color: #9CC5BA; }}
+QLineEdit:hover {{ border-color: {BORDER_HOVER}; }}
 QLineEdit:focus {{ border: 1.5px solid {LEAF}; background: {WHITE}; }}
-QLineEdit[invalid="true"] {{ border: 1.5px solid {ERROR}; background: #FFFBFA; }}
-QLineEdit:disabled {{ color: {SUBTLE}; background: #F3F6F5; }}
+QLineEdit[invalid="true"] {{ border: 1.5px solid {ERROR}; background: {ERROR_FIELD_BG}; }}
+QLineEdit:disabled {{ color: {SUBTLE}; background: {DISABLED_BG}; }}
 
 QCheckBox {{ color: {TEXT}; spacing: 8px; }}
 QCheckBox::indicator {{
@@ -116,7 +142,7 @@ QPushButton {{
     border-radius: 9px; padding: 10px 18px; font-size: 10.5pt; font-weight: 600;
 }}
 QPushButton#PrimaryButton {{
-    color: {WHITE}; border: none;
+    color: {PRIMARY_TEXT}; border: none;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
 }}
 QPushButton#PrimaryButton:hover {{
@@ -124,13 +150,13 @@ QPushButton#PrimaryButton:hover {{
 }}
 QPushButton#PrimaryButton:pressed {{ padding-top: 11px; padding-bottom: 9px; }}
 QPushButton#PrimaryButton:disabled {{
-    color: #F2F7F6;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8CCBB6, stop:1 #92BCE0);
+    color: {PRIMARY_DISABLED_TEXT};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_DISABLED_FROM}, stop:1 {PRIMARY_DISABLED_TO});
 }}
 QPushButton#SecondaryButton {{
     color: {INK}; background: {WHITE}; border: 1px solid {BORDER_STRONG};
 }}
-QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: #9CC5BA; }}
+QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
 QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 QPushButton#SecondaryButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton#LinkButton {{
@@ -152,6 +178,14 @@ QScrollArea > QWidget > QWidget {{ background: transparent; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: {BORDER_STRONG}; border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+"""
+
+# Pop-up menus (the account menu, the menu bar's menus).
+MENU_STYLE = f"""
+QMenu {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 8px; padding: 6px; }}
+QMenu::item {{ color: {INK}; padding: 8px 18px; border-radius: 6px; }}
+QMenu::item:selected {{ background: {FOAM}; }}
+QMenu::item:disabled {{ color: {SUBTLE}; }}
 """
 
 

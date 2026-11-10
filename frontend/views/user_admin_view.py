@@ -37,7 +37,7 @@ QTableWidget {{
     gridline-color: transparent; selection-background-color: {theme.MINT}; selection-color: {theme.INK};
     alternate-background-color: {theme.FOAM};
 }}
-QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid #EDF3F1; }}
+QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid {theme.TABLE_LINE}; }}
 QHeaderView::section {{
     background: {theme.WHITE}; color: {theme.MUTED}; border: none; border-bottom: 1px solid {theme.BORDER};
     padding: 8px 10px; font-weight: 600; font-size: 9pt;

@@ -19,11 +19,13 @@ from backend.bootstrap import build_business_facade
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO
 from frontend.assets import APP_ICON
-from frontend.form_theme import apply_light_mode
+from frontend.form_theme import apply_palette
+from frontend.restart import start_again
 from frontend.theme import apply_theme
 from frontend.views.auth import AuthView
 from frontend.views.home_window import HomeWindow
 from frontend.views.startup_window import StartupWindow
+from frontend.views.theme_choice_dialog import ask_theme_on_first_run
 from frontend.widgets.wheel_guard import install_wheel_guard
 
 
@@ -89,9 +91,13 @@ def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("GEE-Assist")
     app.setWindowIcon(QIcon(str(APP_ICON)))
-    apply_light_mode(app)  # stay light even when Windows is in dark mode
+    apply_palette(app)  # the chosen theme, whatever colour scheme Windows uses
     apply_theme(app)
     install_wheel_guard(app)  # wheel only edits a field the user has selected
+    # First start-up: ask for a theme. A dark one is applied by starting again in it.
+    if "GEE_ASSIST_THEME" not in os.environ and ask_theme_on_first_run():
+        start_again()
+        return 0
 
     facade = build_business_facade()
     # Pause the active download cleanly so its files are closed and it resumes next time.

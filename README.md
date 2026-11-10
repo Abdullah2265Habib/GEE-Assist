@@ -27,6 +27,10 @@ Run the tests with `python -m pytest`.
 
 ## Start-up and sign-in
 
+- On the very first start-up the app asks for a theme: **Light** (the default), **Dark – blue-green**
+  or **Dark – grey**. Change it later in **View → Theme**; the app restarts to apply it. The choice
+  is kept in `workspace/appearance.json`. Each theme has its own project icon (window, taskbar and
+  side bar logo) in `assets/project_icon/`.
 - The intro video (`assets/starting_video/start.mp4`) plays centred on a white screen, then fades out.
   Click or press Esc / Space / Enter to skip it.
 - The sign-in screen offers username/password sign-in, sign-up and Google sign-in.
@@ -37,8 +41,50 @@ Run the tests with `python -m pytest`.
   lasts `SESSION_DURATION` from `.env` (e.g. `7d`, `12h`, `2m`), counted from signing in; after that
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
-  form (with the "Chat with Gemini" assistant); **Dashboard** in the header returns to it.
+  form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
+  returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
+- A menu bar runs along the top of every page, as in Word or Excel:
+  - **File**: New request (Ctrl+N), Sign out, Exit (Ctrl+Q)
+  - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
+  - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
+    Terminal (Ctrl+`), Full screen (F11), Theme
+  - **Terminal** (gkonsol's, as in VS Code): Show terminal (Ctrl+`), Maximise terminal, Clear terminal,
+    Stop running command; Check everything, Verify Earth Engine sign-in, Sign in to Earth Engine…,
+    Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
+    which run that command in the terminal; Command reference (opens docs/GKONSOL.md)
+  - **Options**: Download chunk size…, Manage users… (administrators)
+  - **Help**: About GEE-Assist
+- Navigation is in a side bar on the left: **Query Input**, **Downloads** and **Terminal**, each with
+  an icon that animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding
+  down into a tray; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
+  open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
+  highlighted while it is open.
+- Clicking your name or avatar in the side bar opens the account menu: **Manage account**
+  (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
+
+## gkonsol, the command line
+
+gkonsol is a terminal inside GEE-Assist, below the pages as in VS Code. Open it with the side
+bar's **Terminal** button, the **Terminal** menu, **View → Terminal** or **Ctrl+`**; drag the line
+above it to make it taller or shorter, or maximise it from its header. Everything the window does
+can be done with a command, for example:
+
+```
+gee verify                                   check the Earth Engine sign-in step by step
+gee login                                    sign in to Earth Engine in the browser
+whoami / user info / session verify          your account and session
+form set dataset landsat-8                   fill the parameter form (or: form wizard, ask ...)
+form aoi bbox 74.20 31.40 74.45 31.60
+form submit
+download start                               download with a live progress bar, speed and ETA
+download speed                               the live download speed as a chart
+doctor                                       check everything at once
+```
+
+Type `help` for every command and `help <command>` for one. Its commands work only inside
+GEE-Assist: they are not Windows, PowerShell or cmd commands. Every command is described in
+[docs/GKONSOL.md](docs/GKONSOL.md).
 
 ## Downloading datasets (Google Earth Engine)
 
@@ -46,20 +92,31 @@ One-time setup:
 
 1. Register a Google Cloud project for Earth Engine at <https://code.earthengine.google.com/register>.
 2. Put its ID in `.env`: `GEE_PROJECT=your-project-id`.
-3. Sign in once on this computer: `earthengine authenticate` (with the venv active).
+3. Sign in once on this computer: type `gee login` in gkonsol, or run `earthengine authenticate`
+   in a command prompt (with the venv active). `gee verify` checks the whole set-up.
 
 Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
-**Start Download** under Kept Requests. The **Downloads** page (dashboard card or header button)
+**Start Download** under Kept Requests. The **Downloads** page (dashboard card or side bar)
 shows progress, speed and ETA, with Start / Pause / Cancel for every download.
 
 How it works:
 
 - The request is split into **chunks of 500 MB** (`workspace/download_settings.json`, or
   **Change…** on the Downloads page; applies to new downloads). A 2 GB dataset is 4 chunks.
-- Each chunk is fetched from GEE as several requests under GEE's 48 MB limit.
+- Each chunk is fetched from GEE as small requests (about 4 MB, 8 at a time), far under GEE's
+  48 MB limit: GEE computes small requests sooner, so data arrives early and steadily. Responses
+  are read as they stream in and each piece is written to disk as soon as it arrives, so the
+  speed graph, progress bar, DOWNLOADED, REMAINING and DISK USAGE update live. No data arrives
+  while GEE is still computing, so the speed is 0 then, as in Task Manager.
+- If GEE runs out of memory on a request (e.g. a median over many years), that request is
+  fetched as four smaller ones, split again if needed, and the rest of the download starts at
+  that size. If even small requests fail, the download stops with a message: shorten the date
+  range or use the mosaic composite, then press **Retry**.
 - Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
-- The result is `<output folder>/<satellite>_<lon>_<lat>/<satellite>_<lon>_<lat>.tif`, e.g.
-  `Sentinel-2_73.8231_33.2334/Sentinel-2_73.8231_33.2334.tif` (centre of the AOI).
+- The result is `<output folder>/<name>/<name>.tif`, where `<name>` is
+  `<satellite>_<lon>_<lat>_<start date>_<end date>`: the centre of the AOI and the request's dates, e.g.
+  `Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31/Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31.tif`.
+  The same request downloaded again gets `_2`, `_3`, ... at the end.
 - Pause keeps finished parts; Start continues where it stopped, even after closing the app.
   Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
 
@@ -77,7 +134,12 @@ How it works:
 | Theme (colours, fonts, styles) | `frontend/theme.py` |
 | Admin user management | `frontend/views/user_admin_view.py` |
 | Dashboard and signed-in window | `frontend/views/dashboard_view.py`, `frontend/views/home_window.py` |
+| Side bar | `frontend/widgets/side_bar.py`, `frontend/widgets/side_icons.py` |
+| Menu bar | `frontend/widgets/menu_bar.py` |
+| Themes (colours, saved choice, first-run dialog) | `frontend/palette.py`, `frontend/appearance.py`, `frontend/views/theme_choice_dialog.py` |
 | Query input (parameter form, Gemini assistant) | `frontend/views/main_window.py`, `frontend/views/parameter_form_view.py` |
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
 | Downloads page | `frontend/views/download_view.py`, `frontend/widgets/download_rows.py`, `speed_chart.py` |
+| gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
+| Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |

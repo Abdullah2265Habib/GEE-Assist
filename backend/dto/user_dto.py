@@ -60,6 +60,17 @@ class UserDTO:
 
 
 @dataclass(frozen=True)
+class SessionInfoDTO:
+    """The current sign-in session (shown by gkonsol's ``session`` command)."""
+
+    signed_in: bool
+    remembered: bool = False                 # "Keep me signed in": the session is saved on this computer
+    saved_until: datetime | None = None      # when the saved session runs out (local time)
+    access_expires_in: float | None = None   # seconds until the access token is renewed
+    has_refresh_token: bool = False
+
+
+@dataclass(frozen=True)
 class SignupDTO:
     """What the signup form collects."""
 

@@ -5,6 +5,14 @@ limit, see ``gee_tiles``) on the chunk's own pixel grid, and the tiles are writt
 into one GeoTIFF. Finished tiles are listed in ``<chunk>.tiles.json`` next to the
 file, so a paused or interrupted chunk continues with the next tile.
 
+If Earth Engine runs out of memory or time on a tile, the tile is fetched as four
+quarters instead (and those split again if needed, down to ``MIN_SPLIT_PIXELS``)
+and stitched back together. Later tiles of the same request start at that smaller
+size, so they do not fail first.
+
+Responses are read as they stream in, so progress and speed are reported while a
+tile arrives, not only once it is complete (see ``_ChunkReporter``).
+
 Earth Engine must be signed in once on the computer (``earthengine authenticate``)
 and ``GEE_PROJECT`` in .env must name a Cloud project registered for Earth Engine.
 """
@@ -13,22 +21,43 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional
 
 from backend.config import BYTES_PER_PIXEL, get_dataset
-from backend.data.clients.gee_tiles import TARGET_REQUEST_BYTES, Tile, plan_tiles
+from backend.data.clients.gee_sign_in import GEESignIn
+from backend.data.clients.gee_tiles import Tile, plan_tiles
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
-from backend.dto import ChunkDTO, FormDTO
-from backend.exceptions import GEEError, GEESetupError, ValidationError
+from backend.dto import CheckDTO, ChunkDTO, FormDTO
+from backend.dto.check_dto import CHECK_FAIL, CHECK_OK, CHECK_SKIP, CHECK_WARN
+from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
 
-PARALLEL_REQUESTS = 4      # tiles requested from GEE at the same time
+PARALLEL_REQUESTS = 8      # tiles requested from GEE at the same time
+# Bytes per request as GEE counts them, well under its 48 MB cap: GEE computes a small
+# request much sooner, so data starts arriving earlier and keeps arriving steadily.
+REQUEST_BYTES = 4_000_000
+MIN_SPLIT_PIXELS = 256 * 256  # a too-heavy tile is not split below this
+STREAM_BLOCK = 64 * 1024      # bytes read at a time from a GEE response
+READ_TIMEOUT = 600            # seconds GEE may take before sending a response
+
+
+class _Stopped(Exception):
+    """The download was paused or cancelled while a response was streaming in."""
 NODATA = -9999.0           # value of pixels outside the AOI or without imagery
+
+# The steps of ``GEEClient.diagnose``, in order.
+CHECK_LIBRARY = "Earth Engine library"
+CHECK_PROJECT = "Cloud project (GEE_PROJECT)"
+CHECK_SIGN_IN = "Sign-in on this computer"
+CHECK_CONNECTION = "Connection"
+CHECK_REQUEST = "Test request"
 
 
 class GEEClient(IGEEClient):
@@ -36,13 +65,83 @@ class GEEClient(IGEEClient):
         self,
         project: str = "",
         parallel_requests: int = PARALLEL_REQUESTS,
-        max_request_bytes: int = TARGET_REQUEST_BYTES,
+        max_request_bytes: int = REQUEST_BYTES,
+        sign_in: Optional[GEESignIn] = None,
     ):
         self._project = project
+        self._sign_in = sign_in or GEESignIn()
         self._parallel = max(1, parallel_requests)
         self._max_request_bytes = max_request_bytes
         self._initialized = False
         self._lock = threading.Lock()
+        self._splits: dict[str, int] = {}  # request -> times its tiles had to be split
+        self._sessions = threading.local()  # one HTTP session per download thread
+
+    # ------------------------------------------------------------- set-up checks
+    def diagnose(self) -> list[CheckDTO]:
+        """Check the Earth Engine set-up step by step (``validate_access`` does it in one go)."""
+        try:
+            ee = self._ee()
+        except GEESetupError as exc:
+            return [
+                CheckDTO(CHECK_LIBRARY, CHECK_FAIL, str(exc), "Install it: pip install earthengine-api"),
+                self._project_check(),
+                CheckDTO(CHECK_SIGN_IN, CHECK_SKIP, "Needs the Earth Engine library."),
+                CheckDTO(CHECK_CONNECTION, CHECK_SKIP, "Needs the Earth Engine library."),
+                CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection."),
+            ]
+        version = getattr(ee, "__version__", "")
+        checks = [
+            CheckDTO(CHECK_LIBRARY, CHECK_OK, f"earthengine-api {version}" if isinstance(version, str) else "Installed."),
+            self._project_check(),
+            _sign_in_check(ee),
+        ]
+        if not self._project:
+            return checks + [CheckDTO(CHECK_CONNECTION, CHECK_SKIP, "Needs GEE_PROJECT."),
+                             CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection.")]
+
+        started = time.perf_counter()
+        try:
+            self._initialize()
+        except GEEError as exc:
+            return checks + [CheckDTO(CHECK_CONNECTION, CHECK_FAIL, str(exc), duration_ms=_ms_since(started)),
+                             CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection.")]
+        checks.append(CheckDTO(CHECK_CONNECTION, CHECK_OK, f"Connected with project '{self._project}'.",
+                               duration_ms=_ms_since(started)))
+
+        started = time.perf_counter()
+        try:
+            ee.Number(1).getInfo()
+        except Exception as exc:
+            checks.append(CheckDTO(CHECK_REQUEST, CHECK_FAIL, str(_error(exc, self._project)),
+                                   duration_ms=_ms_since(started)))
+        else:
+            elapsed = _ms_since(started)
+            checks.append(CheckDTO(CHECK_REQUEST, CHECK_OK, f"Earth Engine answered in {elapsed:.0f} ms.",
+                                   duration_ms=elapsed))
+        return checks
+
+    def _project_check(self) -> CheckDTO:
+        if self._project:
+            return CheckDTO(CHECK_PROJECT, CHECK_OK, self._project)
+        return CheckDTO(
+            CHECK_PROJECT, CHECK_FAIL, "GEE_PROJECT is not set in .env.",
+            "Set GEE_PROJECT in .env to a Google Cloud project registered for Earth Engine "
+            "(https://code.earthengine.google.com/register), then restart GEE-Assist.",
+        )
+
+    # ------------------------------------------------------------- browser sign-in
+    def begin_sign_in(self) -> str:
+        return self._sign_in.begin()
+
+    def complete_sign_in(self, should_stop: Optional[StopCheck] = None) -> str:
+        path = self._sign_in.wait(should_stop)
+        with self._lock:
+            self._initialized = False  # connect again, with the new credentials
+        return path
+
+    def cancel_sign_in(self) -> None:
+        self._sign_in.cancel()
 
     # ------------------------------------------------------------- access
     def validate_access(self) -> bool:
@@ -110,16 +209,23 @@ class GEEClient(IGEEClient):
             progress.clear()
             pending = tiles
             dst = _open_chunk_file(target, chunk, resume=False)
-        with dst:
+        reporter = _ChunkReporter(on_progress)
+        with _ChunkFile(target, dst) as chunk_file:
             pool = ThreadPoolExecutor(max_workers=self._parallel, thread_name_prefix="gee-tile")
             try:
                 queue = iter(pending)
                 running: dict[Future, Tile] = {}
 
+                key = _request_key(chunk)
+
                 def submit_next() -> None:
                     tile = next(queue, None)
                     if tile is not None:
-                        running[pool.submit(self._fetch_tile, image, chunk, tile)] = tile
+                        with self._lock:
+                            splits = self._splits.get(key, 0)
+                        size = tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL
+                        on_bytes = reporter.receiver(tile.index, size)
+                        running[pool.submit(self._fetch_pixels, image, chunk, tile, splits, on_bytes, stop)] = tile
 
                 for _ in range(self._parallel):
                     submit_next()
@@ -127,15 +233,20 @@ class GEEClient(IGEEClient):
                     finished, _ = wait(running, return_when=FIRST_COMPLETED)
                     for future in finished:
                         tile = running.pop(future)
-                        data = future.result()  # GEEError propagates to the caller
-                        _write_tile(dst, data, tile, chunk)
+                        try:
+                            pixels, splits = future.result()  # GEEError propagates to the caller
+                        except _Stopped:
+                            return False
+                        with self._lock:
+                            self._splits[key] = max(self._splits.get(key, 0), splits)
+                        chunk_file.write(pixels, tile)
                         progress.add(tile.index)
-                        if on_progress:  # raster bytes added, matching the chunk's planned size
-                            on_progress(tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL)
+                        reporter.written(tile.index, tile.width * tile.height * len(chunk.bands) * BYTES_PER_PIXEL)
                         if stop():
                             return False  # requests still in flight are abandoned
                         submit_next()
             finally:
+                reporter.close()  # takes back the progress of tiles that were not written
                 pool.shutdown(wait=False, cancel_futures=True)
         progress.clear()
         return True
@@ -166,7 +277,38 @@ class GEEClient(IGEEClient):
         except Exception as exc:
             raise _error(exc, self._project) from exc
 
-    def _fetch_tile(self, image: Any, chunk: ChunkDTO, tile: Tile) -> bytes:
+    def _fetch_pixels(
+        self, image: Any, chunk: ChunkDTO, tile: Tile, splits: int,
+        on_bytes: "_BytesCallback", stop: StopCheck,
+    ) -> tuple[Any, int]:
+        """Pixels of ``tile`` (bands x height x width) and how many times the tile had to be split.
+        ``splits`` > 0 starts with that many splits already."""
+        if splits == 0 or not _can_split(tile):
+            try:
+                data = self._fetch_tile(image, chunk, tile, on_bytes, stop)
+            except GEERequestTooHeavyError:
+                if not _can_split(tile):
+                    raise
+                logger.info("Tile %s of chunk %s is too heavy for Earth Engine; fetching it in quarters",
+                            tile.index, chunk.id)
+                splits = 1
+            else:
+                return _decode_tile(data, tile, chunk), 0
+
+        import numpy as np
+
+        pixels = np.empty((len(chunk.bands), tile.height, tile.width), dtype="float32")
+        start = splits - 1
+        for part in _quarters(tile):
+            part_pixels, part_splits = self._fetch_pixels(image, chunk, part, start, on_bytes, stop)
+            pixels[:, part.row - tile.row:part.row - tile.row + part.height,
+                   part.col - tile.col:part.col - tile.col + part.width] = part_pixels
+            start = max(start, part_splits)  # the next quarters start as small as this one had to be
+        return pixels, start + 1
+
+    def _fetch_tile(
+        self, image: Any, chunk: ChunkDTO, tile: Tile, on_bytes: "_BytesCallback", stop: StopCheck,
+    ) -> bytes:
         """GeoTIFF bytes of one tile, on the chunk's grid shifted to the tile's corner."""
         a, b, c, d, e, f = chunk.transform
         request = {
@@ -182,9 +324,56 @@ class GEEClient(IGEEClient):
             },
         }
         try:
-            return self._ee().data.computePixels(request)
+            return self._compute_pixels(request, on_bytes, stop)
+        except _Stopped:
+            raise
         except Exception as exc:
             raise _error(exc, self._project) from exc
+
+    def _compute_pixels(self, request: dict, on_bytes: "_BytesCallback", stop: StopCheck) -> bytes:
+        """``ee.data.computePixels``, but reading the response as it streams in.
+
+        The Earth Engine library only returns a response once all of it has arrived,
+        so the request it builds is sent here instead. If the library internals are
+        not as expected, the library is called directly (no live progress).
+        """
+        ee = self._ee()
+        try:
+            from ee import serializer
+
+            body = dict(request, expression=serializer.encode(request["expression"]))
+            call = ee.data._get_cloud_projects_raw().image().computePixels(
+                project=ee.data._get_projects_path(), body=body,
+            )
+            session = self._session(ee.data._get_state().credentials)
+        except Exception:
+            logger.debug("Streaming is not available; using ee.data.computePixels", exc_info=True)
+            data = ee.data.computePixels(request)
+            on_bytes(len(data), len(data))
+            return data
+
+        with session.request(call.method, call.uri, data=call.body, headers=call.headers,
+                             stream=True, timeout=(30, READ_TIMEOUT)) as response:
+            if response.status_code != 200:
+                raise ee.EEException(_error_message(response))
+            parts, wire = [], 0
+            for block in response.iter_content(STREAM_BLOCK):
+                if stop():
+                    raise _Stopped()
+                parts.append(block)
+                now = response.raw.tell()  # bytes off the network (before any decompression)
+                on_bytes(now - wire, len(block))
+                wire = now
+            return b"".join(parts)
+
+    def _session(self, credentials: Any) -> Any:
+        from google.auth.transport.requests import AuthorizedSession
+
+        session = getattr(self._sessions, "session", None)
+        if session is None or session.credentials is not credentials:
+            session = AuthorizedSession(credentials)
+            self._sessions.session = session
+        return session
 
 
 # ----------------------------------------------------------------------------- GeoTIFF writing
@@ -210,22 +399,125 @@ def _open_chunk_file(path: Path, chunk: ChunkDTO, resume: bool):
         width=chunk.width, height=chunk.height, count=len(chunk.bands), dtype="float32",
         crs=chunk.crs, transform=Affine(*chunk.transform), nodata=NODATA,
         tiled=True, blockxsize=256, blockysize=256, BIGTIFF="IF_SAFER",
+        SPARSE_OK="TRUE",  # blocks not downloaded yet take no disk space (even after a pause)
     )
     for index, band in enumerate(chunk.bands, start=1):
         dst.set_band_description(index, band)
     return dst
 
 
-def _write_tile(dst: Any, data: bytes, tile: Tile, chunk: ChunkDTO) -> None:
+_BytesCallback = Any  # (bytes off the network, bytes of the response) -> None
+
+
+class _ChunkReporter:
+    """Reports a chunk's progress to the download service while its tiles stream in.
+
+    While a tile arrives, the response bytes count as provisional progress (at most the
+    tile's raster size); once the tile is written, its progress becomes exactly its
+    raster size. When the chunk stops (paused, failed), the provisional progress of
+    tiles that were not written is taken back, so the progress bar never runs ahead
+    of the data on disk. Bytes from requests abandoned after that are ignored.
+    """
+
+    def __init__(self, on_progress: Optional[ProgressCallback]):
+        self._on_progress = on_progress or (lambda raster, received: None)
+        self._lock = threading.Lock()
+        self._shown: dict[int, int] = {}     # tile index -> provisional progress reported
+        self._streamed: dict[int, int] = {}  # tile index -> response bytes received so far
+        self._closed = False
+
+    def receiver(self, index: int, size: int) -> _BytesCallback:
+        def on_bytes(network: int, payload: int) -> None:
+            with self._lock:
+                if self._closed:
+                    return
+                self._streamed[index] = self._streamed.get(index, 0) + payload
+                shown = min(self._streamed[index], size)
+                delta = shown - self._shown.get(index, 0)
+                self._shown[index] = shown
+                self._on_progress(delta, network)
+        return on_bytes
+
+    def written(self, index: int, size: int) -> None:
+        with self._lock:
+            delta = size - self._shown.pop(index, 0)
+            self._streamed.pop(index, None)
+            if delta:
+                self._on_progress(delta, 0)
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed = True
+            unwritten = sum(self._shown.values())
+            self._shown.clear()
+            if unwritten:
+                self._on_progress(-unwritten, 0)
+
+
+def _error_message(response: Any) -> str:
+    """The message of an Earth Engine error response."""
+    try:
+        return response.json()["error"]["message"]
+    except Exception:
+        return f"HTTP {response.status_code}: {response.text[:300]}"
+
+
+def _decode_tile(data: bytes, tile: Tile, chunk: ChunkDTO) -> Any:
+    """The pixels of a GeoTIFF returned by GEE, checked against the tile's shape."""
     from rasterio.io import MemoryFile
-    from rasterio.windows import Window
 
     with MemoryFile(data) as memory, memory.open() as src:
         pixels = src.read(out_dtype="float32")
     expected = (len(chunk.bands), tile.height, tile.width)
     if pixels.shape != expected:
         raise GEEError(f"GEE returned a tile of shape {pixels.shape}, expected {expected}.")
-    dst.write(pixels, window=Window(tile.col, tile.row, tile.width, tile.height))
+    return pixels
+
+
+class _ChunkFile:
+    """The chunk GeoTIFF being written. A tile is on disk once ``write`` returns."""
+
+    def __init__(self, path: Path, dst: Any):
+        self._path, self._dst = path, dst
+
+    def write(self, pixels: Any, tile: Tile) -> None:
+        import rasterio
+        from rasterio.windows import Window
+
+        self._dst.write(pixels, window=Window(tile.col, tile.row, tile.width, tile.height))
+        # GDAL keeps written blocks in memory until the file is closed: close it so the tile
+        # is on disk (disk usage shows it, a crash keeps it), then reopen for the next tile.
+        self._dst.close()
+        self._dst = rasterio.open(self._path, "r+")
+
+    def __enter__(self) -> "_ChunkFile":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self._dst.close()
+
+
+def _can_split(tile: Tile) -> bool:
+    return tile.width * tile.height > MIN_SPLIT_PIXELS
+
+
+def _quarters(tile: Tile) -> list[Tile]:
+    """``tile`` cut in half each way (only one way if it is a single row or column)."""
+    half_width, half_height = (tile.width + 1) // 2, (tile.height + 1) // 2
+    parts = []
+    for row in range(tile.row, tile.row + tile.height, half_height):
+        for col in range(tile.col, tile.col + tile.width, half_width):
+            parts.append(Tile(
+                index=tile.index, col=col, row=row,
+                width=min(half_width, tile.col + tile.width - col),
+                height=min(half_height, tile.row + tile.height - row),
+            ))
+    return parts
+
+
+def _request_key(chunk: ChunkDTO) -> str:
+    """Identifies the request a chunk belongs to (chunks of one download share it)."""
+    return json.dumps(chunk.request.to_dict() if chunk.request else {}, sort_keys=True, default=str)
 
 
 class _TileProgress:
@@ -249,11 +541,45 @@ class _TileProgress:
         self.path.unlink(missing_ok=True)
 
 
+# ----------------------------------------------------------------------------- set-up checks
+def _sign_in_check(ee: Any) -> CheckDTO:
+    """Whether Earth Engine has been signed in on this computer (``earthengine authenticate``)."""
+    try:
+        path = str(ee.oauth.get_credentials_path())
+    except Exception:
+        path = ""
+    if path and os.path.isfile(path):
+        return CheckDTO(CHECK_SIGN_IN, CHECK_OK, f"Saved sign-in: {path}")
+    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        return CheckDTO(CHECK_SIGN_IN, CHECK_OK, "Service account key from GOOGLE_APPLICATION_CREDENTIALS.")
+    where = f" at {path}" if path else ""
+    return CheckDTO(
+        CHECK_SIGN_IN, CHECK_WARN, f"No saved Earth Engine sign-in{where}; other Google credentials are tried.",
+        "Sign in to Earth Engine on this computer (earthengine authenticate).",
+    )
+
+
+def _ms_since(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
+
+
 # ----------------------------------------------------------------------------- errors
 def _error(exc: Exception, project: str) -> GEEError:
-    """GEESetupError for problems only the user can fix, GEEError (retried) for the rest."""
+    """GEESetupError for problems only the user can fix, GEERequestTooHeavyError when the request
+    needs too much memory or time, GEEError (retried) for the rest."""
     message = _explain(exc, project)
-    return GEESetupError(message) if _is_setup_problem(str(exc)) else GEEError(message)
+    if _is_setup_problem(str(exc)):
+        return GEESetupError(message)
+    if _is_too_heavy(str(exc)):
+        return GEERequestTooHeavyError(message)
+    return GEEError(message)
+
+
+def _is_too_heavy(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in (
+        "memory limit exceeded", "out of memory", "computation timed out", "capacity exceeded",
+    ))
 
 
 def _is_setup_problem(text: str) -> bool:
@@ -280,6 +606,11 @@ def _explain(exc: Exception, project: str) -> str:
         return (
             f"The Cloud project '{project}' cannot use Earth Engine. Register it at "
             "https://code.earthengine.google.com/register or set GEE_PROJECT to another project."
+        )
+    if _is_too_heavy(text):
+        return (
+            "Earth Engine ran out of memory computing this request. Shorten the date range or use "
+            f"the mosaic composite, then press Retry. ({text})"
         )
     if "too many" in lowered or "quota" in lowered or "rate limit" in lowered:
         return "Earth Engine is busy or the quota is used up. The download will retry; try again later if it keeps failing."

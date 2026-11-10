@@ -20,6 +20,7 @@ from frontend.views import download_view as download_module  # noqa: E402
 from frontend.views.download_view import DownloadView  # noqa: E402
 from frontend.views.kept_requests_view import KeptRequestsView  # noqa: E402
 from frontend.widgets.download_rows import CompletedRow, JobRow, job_status, job_title  # noqa: E402
+from frontend.widgets.speed_chart import SpeedChart  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -97,16 +98,58 @@ def test_empty_sections_say_so(view):
 
 
 def test_statistics_follow_the_running_download(view, facade):
-    facade.list_downloads.return_value = [_job("1", "running", downloaded_bytes=740_000_000, speed_bps=1_500_000, merge_speed_bps=3_200_000)]
+    facade.list_downloads.return_value = [
+        _job("1", "running", downloaded_bytes=740_000_000, received_bytes=612_000_000, disk_bytes=700_000_000,
+             speed_bps=1_500_000, average_speed_bps=1_200_000, merge_speed_bps=3_200_000),
+        _job("2", "completed", downloaded_bytes=1_000_000_000, received_bytes=950_000_000, disk_bytes=900_000_000,
+             dataset=DatasetDTO(id="2", source="", path="x.tif", size_bytes=900_000_000)),  # history: not counted
+        _job("3", "paused", downloaded_bytes=100_000_000),  # not running: not counted
+    ]
     view.refresh()
 
     assert view.stats["CURRENT"].text() == "1.5 MB/s"
     assert view.stats["PEAK"].text() == "1.5 MB/s"
-    assert view.stats["DOWNLOADED"].text() == "740.0 MB"
+    assert view.stats["DOWNLOADED"].text() == "612.0 MB"    # the running download only
+    assert view.stats["DISK USAGE"].text() == "700.0 MB"
     assert view.stats["REMAINING"].text() == "260.0 MB"
     assert view.stats["MERGING SPEED"].text() == "3.2 MB/s"
     assert view.chunk_setting.text() == "Chunk size: 500 MB"
     assert view.chart.samples()[-1] == 1_500_000
+    assert view.chart.averages()[-1] == 1_200_000
+
+
+def test_speed_chart_keeps_the_last_minute_of_real_time(app):
+    now = [0.0]
+    chart = SpeedChart(clock=lambda: now[0])
+    for second in range(0, 90, 10):  # irregular refreshes are placed by time, not by count
+        now[0] = second
+        chart.add_sample(second * 1000, 500)
+    assert chart.samples() == [20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000]  # 20 s is just off the edge
+    assert chart.averages()[-1] == 500
+    chart.grab()  # paints without errors
+
+
+def test_download_figures_are_empty_without_a_running_download(view, facade):
+    facade.list_downloads.return_value = [
+        _job("1", "paused", received_bytes=300_000_000, disk_bytes=320_000_000),
+        _job("2", "completed", received_bytes=950_000_000, disk_bytes=900_000_000),
+    ]
+    view.refresh()
+    assert view.stats["DOWNLOADED"].text() == "–"
+    assert view.stats["DISK USAGE"].text() == "–"
+    assert view.stats["REMAINING"].text() == "–"
+
+
+def test_merging_speed_is_only_for_a_merge_running_now(view, facade):
+    facade.list_downloads.return_value = [_job("1", "completed", merge_speed_bps=5_000_000)]  # an old value
+    view.refresh()
+    assert view.stats["MERGING SPEED"].text() == "0 B/s"
+
+
+def test_speed_graph_keeps_sampling_while_the_page_is_hidden(view):
+    view.show()
+    view.hide()
+    assert view._timer.isActive()
 
 
 # ------------------------------------------------------------------ buttons
