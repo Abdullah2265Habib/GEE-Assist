@@ -19,10 +19,12 @@ from frontend.gkonsol.text import Line
 
 MAX_LINES = 5000
 MIN_COLUMNS = 20
+FIT_SLACK = 4  # pixels: a view exactly as tall as its lines would still show a scroll bar
 
 
 class TerminalView(QPlainTextEdit):
     clicked = pyqtSignal()  # a click that selected nothing: the input line takes the focus
+    changed = pyqtSignal()  # lines were added, redrawn or removed
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -31,6 +33,7 @@ class TerminalView(QPlainTextEdit):
         self.setUndoRedoEnabled(False)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # long lines wrap
         self.setMaximumBlockCount(MAX_LINES)  # the oldest lines go first; the live region is at the end
         self.setFont(colors.monospace_font())
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse
@@ -67,6 +70,7 @@ class TerminalView(QPlainTextEdit):
                 self._insert(cursor, spans)
         cursor.endEditBlock()
         self._follow(follow)
+        self.changed.emit()
 
     def set_live(self, lines: list[Line]) -> None:
         follow = self._at_bottom()
@@ -80,12 +84,14 @@ class TerminalView(QPlainTextEdit):
         cursor.endEditBlock()
         self._live = [list(spans) for spans in lines]
         self._follow(follow)
+        self.changed.emit()
 
     def end_live(self, keep: bool) -> None:
         if not keep:
             cursor = QTextCursor(self.document())
             self._remove_live(cursor)
         self._live = []
+        self.changed.emit()
 
     def clear(self) -> None:  # noqa: D102 - keeps the live region, unlike QPlainTextEdit.clear
         live = self._live
@@ -93,9 +99,24 @@ class TerminalView(QPlainTextEdit):
         self._empty, self._live = True, []
         if live:
             self.set_live(live)
+        self.changed.emit()
 
     def plain_text(self) -> str:
         return self.toPlainText()
+
+    def content_height(self, limit: int) -> int:
+        """The pixels the lines need, padding included; counting stops past ``limit``."""
+        total = float(self.height() - self.viewport().height())  # frame and padding
+        if self._empty:
+            return int(total)
+        block = self.document().firstBlock()
+        while block.isValid() and total <= limit:
+            total += self.blockBoundingRect(block).height()
+            block = block.next()
+        return int(total + 0.999) + FIT_SLACK
+
+    def scroll_to_bottom_later(self) -> None:
+        self._scroll_later.start()
 
     # ------------------------------------------------------------- helpers
     def _insert(self, cursor: QTextCursor, spans: Line) -> None:

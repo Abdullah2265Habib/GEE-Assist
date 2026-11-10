@@ -18,6 +18,7 @@ from typing import Any, Optional
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
+    QWIDGETSIZE_MAX,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -172,12 +173,22 @@ class GkonsolPanel(QFrame):
         line.addWidget(self.prompt)
         line.addWidget(self.input, 1)
 
+        # The prompt follows the last line of output, as in other terminals: the output is
+        # only as tall as its lines (the space under the prompt stays empty) until it fills
+        # the panel; then it scrolls and the prompt stays at the bottom.
+        self._header, self._input_row = header, input_row
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(header)
         layout.addWidget(self.view, 1)
         layout.addWidget(input_row)
+        layout.addStretch(0)
+        self._fit_later = QTimer(self)
+        self._fit_later.setSingleShot(True)
+        self._fit_later.setInterval(0)
+        self._fit_later.timeout.connect(self.fit_output)
+        self.view.changed.connect(self._fit_later.start)
 
         self._spinner = QTimer(self)
         self._spinner.setInterval(SPINNER_MS)
@@ -214,6 +225,21 @@ class GkonsolPanel(QFrame):
 
     def focus_input(self) -> None:
         self.input.setFocus()
+
+    def fit_output(self) -> None:
+        """Make the output as tall as its lines while they fit, so the prompt follows them."""
+        available = self.height() - self._header.height() - self._input_row.sizeHint().height()
+        needed = self.view.content_height(available)
+        capped = self.view.maximumHeight() < QWIDGETSIZE_MAX
+        if needed < available:
+            self.view.setMaximumHeight(max(0, needed))
+        elif capped:
+            self.view.setMaximumHeight(QWIDGETSIZE_MAX)
+            self.view.scroll_to_bottom_later()  # it now scrolls: show the newest lines
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self._fit_later.start()
 
     def show_maximized_state(self, maximized: bool) -> None:
         if maximized:
