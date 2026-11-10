@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from frontend.gkonsol.command import Registry
-from frontend.gkonsol.commands import general
+from frontend.gkonsol.commands import account, general
 
-MODULES = (general,)
+MODULES = (general, account)
 
 
 def build_registry() -> Registry:
