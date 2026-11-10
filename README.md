@@ -47,16 +47,40 @@ Run the tests with `python -m pytest`.
   - **File**: New request (Ctrl+N), Sign out, Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
-    Full screen (F11), Theme
+    Terminal (Ctrl+`), Full screen (F11), Theme
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: About GEE-Assist
-- Navigation is in a side bar on the left: **Query Input** and **Downloads**, each with an icon that
-  animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding down into a
-  tray). It starts collapsed (icons only); clicking the logo slides it open (icons and names) or
-  closed again.
+- Navigation is in a side bar on the left: **Query Input**, **Downloads** and **Terminal**, each with
+  an icon that animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding
+  down into a tray; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
+  open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
+  highlighted while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
+
+## gkonsol, the command line
+
+gkonsol is a terminal inside GEE-Assist, below the pages as in VS Code. Open it with the side
+bar's **Terminal** button, **View → Terminal** or **Ctrl+`**; drag the line above it to make it
+taller or shorter, or maximise it from its header. Everything the window does can be done with
+a command, for example:
+
+```
+gee verify                                   check the Earth Engine sign-in step by step
+gee login                                    sign in to Earth Engine in the browser
+whoami / user info / session verify          your account and session
+form set dataset landsat-8                   fill the parameter form (or: form wizard, ask ...)
+form aoi bbox 74.20 31.40 74.45 31.60
+form submit
+download start                               download with a live progress bar, speed and ETA
+download speed                               the live download speed as a chart
+doctor                                       check everything at once
+```
+
+Type `help` for every command and `help <command>` for one. Its commands work only inside
+GEE-Assist: they are not Windows, PowerShell or cmd commands. Every command is described in
+[docs/GKONSOL.md](docs/GKONSOL.md).
 
 ## Downloading datasets (Google Earth Engine)
 
@@ -64,7 +88,8 @@ One-time setup:
 
 1. Register a Google Cloud project for Earth Engine at <https://code.earthengine.google.com/register>.
 2. Put its ID in `.env`: `GEE_PROJECT=your-project-id`.
-3. Sign in once on this computer: `earthengine authenticate` (with the venv active).
+3. Sign in once on this computer: type `gee login` in gkonsol, or run `earthengine authenticate`
+   in a command prompt (with the venv active). `gee verify` checks the whole set-up.
 
 Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
 **Start Download** under Kept Requests. The **Downloads** page (dashboard card or side bar)
@@ -112,3 +137,5 @@ How it works:
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
 | Downloads page | `frontend/views/download_view.py`, `frontend/widgets/download_rows.py`, `speed_chart.py` |
+| gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
+| Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |

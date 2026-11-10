@@ -35,6 +35,7 @@ from frontend.aoi_geometry import (
     bbox_polygon,
     circle_polygon,
     estimate_download,
+    format_bytes,
     format_distance,
     polygon_from_geojson,
     vertex_count,
@@ -522,7 +523,7 @@ def estimate_for(ctx: Context) -> Optional[dict[str, str]]:
         "bands": str(len(form.bands)),
         "size": format_size(estimate.total_bytes),
         "chunks": f"{chunks} chunk{'s' if chunks != 1 else ''} of {chunk_mb} MB",
-        "requests": f"{estimate.requests:,} (GEE allows {format_size(GEE_MAX_REQUEST_BYTES)} per request)",
+        "requests": f"{estimate.requests:,} (GEE allows {format_bytes(GEE_MAX_REQUEST_BYTES)} per request)",
     }
 
 

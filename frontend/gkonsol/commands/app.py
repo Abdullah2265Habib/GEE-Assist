@@ -28,7 +28,7 @@ from frontend.gkonsol.text import Span
 
 GROUP = "App"
 LOW_DISK_BYTES = 5_000_000_000   # warn below 5 GB free
-MIN_PANEL_HEIGHT = 80
+MIN_PANEL_HEIGHT = 110     # as low as the terminal panel goes (its header, a line and the prompt)
 
 PAGE_WORDS = {
     "dashboard": "dashboard", "home": "dashboard",

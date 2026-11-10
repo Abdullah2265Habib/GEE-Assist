@@ -69,7 +69,7 @@ def test_panel_size(term):
     term.type("panel compress")
     assert not term.panel.maximized
     assert "400 px high" in term.type("panel height 400px")
-    assert "from 80 to 4000" in term.type("panel height 10")
+    assert "from 110 to 4000" in term.type("panel height 10")
 
 
 # ------------------------------------------------------------------ settings and check-up
