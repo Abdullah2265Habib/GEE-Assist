@@ -516,6 +516,13 @@ class ParameterFormView(QWidget):
         if not path:  # 6c: user cancelled
             return
         try:
+            self.import_geojson(path)
+        except GeeAssistError:
+            pass  # shown under the area
+
+    def import_geojson(self, path: str) -> None:
+        """UC-04: read a GeoJSON file into the form. Raises the import error after showing it."""
+        try:
             aoi = self._facade.import_aoi(path)
         except GeeAssistError as exc:  # 6a / 6b
             self._imported_aoi = ""
@@ -523,16 +530,21 @@ class ParameterFormView(QWidget):
             self.map_widget.show_geojson("")
             self._set_field_error("aoi", str(exc))
             self._update_estimate()
-            return
+            raise
+        self.set_imported_area(aoi, Path(path).name)
 
+    def set_imported_area(self, aoi: str, name: str) -> None:
+        """Show ``aoi`` (GeoJSON) as the imported file's area and switch to "GeoJSON file"."""
         self._imported_aoi = aoi
-        self._imported_name = Path(path).name
+        self._imported_name = name
         geometry = json.loads(aoi)
         min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
         self.aoi_file_label.setText(
             f"<b>{self._imported_name}</b> · {geometry['type']}<br>"
             f"Extent: lon {min_lon:.4f} → {max_lon:.4f}, lat {min_lat:.4f} → {max_lat:.4f}"
         )
+        self.aoi_file_toggle.setChecked(True)
+        self._on_aoi_mode_changed(AOI_FILE)
         self.map_widget.show_geojson(aoi)
         self._set_field_error("aoi", "")
         self._update_estimate()
