@@ -61,7 +61,7 @@ QPushButton#SideButton {{
 QPushButton#SideButton[hasIcon="true"] {{ padding-left: {ICON_LEFT + ICON_SIZE + 10}px; }}
 QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; border-radius: {BUTTON_HEIGHT // 2}px; }}
 QPushButton#SideButton:hover {{ background: {theme.FOAM}; }}
-QPushButton#SideButton:pressed {{ background: {theme.MINT}; }}
+QPushButton#SideButton:pressed, QPushButton#SideButton:checked {{ background: {theme.MINT}; }}
 """
 
 
