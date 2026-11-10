@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 from backend.business.download.i_download_service import IDownloadService
 from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.request.i_request_service import IRequestService
 from backend.business.user.i_user_service import IUserService
-from backend.dto import DownloadJobDTO, FormDTO, ValidationDTO
+from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, ValidationDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SessionInfoDTO,
@@ -129,6 +131,18 @@ class BusinessFacade(IBusinessFacade):
 
     def is_gee_available(self) -> bool:
         return self._download_service.is_gee_available()
+
+    def check_gee_setup(self) -> list[CheckDTO]:
+        return self._download_service.check_gee_setup()
+
+    def begin_gee_sign_in(self) -> str:
+        return self._download_service.begin_gee_sign_in()
+
+    def complete_gee_sign_in(self, should_stop: Optional[Callable[[], bool]] = None) -> str:
+        return self._download_service.complete_gee_sign_in(should_stop)
+
+    def cancel_gee_sign_in(self) -> None:
+        self._download_service.cancel_gee_sign_in()
 
     def shutdown_downloads(self) -> None:
         self._download_service.shutdown()
