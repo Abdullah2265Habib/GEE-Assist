@@ -58,7 +58,7 @@ def stylesheet(font: QFont) -> str:
                   border-bottom: 1px solid {colors.BORDER}; }}
 QLabel#GkonsolTitle {{
     color: {theme.INK}; font-size: 8.5pt; font-weight: 600; letter-spacing: 1px;
-    padding: 6px 2px 4px 2px; border-bottom: 2px solid {theme.LEAF};
+    padding: 6px 2px 4px 2px; border: none; border-bottom: 2px solid {theme.LEAF};
 }}
 QToolButton#GkonsolButton {{ border: none; border-radius: 5px; background: transparent; }}
 QToolButton#GkonsolButton:hover {{ background: {theme.MINT}; }}
