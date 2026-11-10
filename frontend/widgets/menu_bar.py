@@ -116,6 +116,8 @@ class AppMenuBar(QMenuBar):
                 action.setToolTip(f"Runs '{command}' in the terminal")
                 action.triggered.connect(lambda _=False, command=command: self.terminal_command.emit(command))
                 self.terminal_commands[command] = action
+        self.command_reference = self._action(self.terminal_menu, "Command &reference")
+        self.command_reference.setToolTip("Every gkonsol command, with examples (docs/GKONSOL.md)")
 
         self.options_menu = self._menu("&Options")
         self.chunk_size = self._action(self.options_menu, "Download &chunk size…")

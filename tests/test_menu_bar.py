@@ -133,7 +133,7 @@ def test_choosing_another_theme_asks_for_it(bar):
 def test_terminal_menu_items_run_gkonsol_commands(bar):
     assert _items(bar.terminal_menu)[4:] == [
         "Check &everything", "&Verify Earth Engine sign-in", "Sign &in to Earth Engine…", "Verify my sessi&on",
-        "&Watch download progress", "Download s&peed chart", "&List downloads", "gkonsol &help",
+        "&Watch download progress", "Download s&peed chart", "&List downloads", "gkonsol &help", "Command &reference",
     ]
     ran = []
     bar.terminal_command.connect(ran.append)
