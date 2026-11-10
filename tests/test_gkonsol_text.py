@@ -53,6 +53,12 @@ def test_table_aligns_columns_and_styles_them():
     assert lines[0][0].style == text.HEADING and lines[1][2] == Span("Sentinel-2", text.ACCENT)
 
 
+def test_table_cells_can_have_their_own_style():
+    lines = text.table(["ID", "STATUS"], [["a1", Span("failed", text.ERROR)], ["b2", "queued"]], styles=(text.MUTED,))
+    assert lines[1][2] == Span("failed", text.ERROR) and lines[2][2] == Span("queued", text.TEXT)
+    assert text.plain(lines[1]) == "a1  failed"
+
+
 def test_table_shortens_the_widest_column_to_fit():
     lines = text.table(["ID", "FOLDER"], [["a1", "x" * 40]], max_width=20)
     assert all(len(text.plain(line)) <= 20 for line in lines)
