@@ -4,34 +4,7 @@ import pytest
 
 from frontend.gkonsol.effects import Ask, Interrupted, Sleep, Task, task
 from frontend.gkonsol.runner import Runner
-
-
-class StepScheduler:
-    """Runs tasks and timers only when the test says so."""
-
-    def __init__(self):
-        self.tasks, self.timers = [], []
-
-    def run_task(self, fn, args, on_success, on_error):
-        self.tasks.append((fn, args, on_success, on_error))
-
-    def call_later(self, seconds, callback):
-        self.timers.append((seconds, callback))
-
-    def finish_tasks(self):
-        while self.tasks:
-            fn, args, on_success, on_error = self.tasks.pop(0)
-            try:
-                result = fn(*args)
-            except Exception as exc:
-                on_error(exc)
-            else:
-                on_success(result)
-
-    def fire_timers(self):
-        timers, self.timers = self.timers, []
-        for _, callback in timers:
-            callback()
+from tests.gkonsol_fakes import StepScheduler
 
 
 @pytest.fixture
