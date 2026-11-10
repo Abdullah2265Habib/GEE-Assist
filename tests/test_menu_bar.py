@@ -36,7 +36,7 @@ def test_menus_hold_the_expected_items(bar):
     assert _items(bar.file_menu) == ["&New request", "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "&Side bar",
-                                     "&Full screen", "&Theme"]
+                                     "&Terminal", "&Full screen", "&Theme"]
     assert _items(bar.options_menu) == ["Download &chunk size…", "&Manage users…"]
     assert _items(bar.help_menu) == ["&About GEE-Assist"]
 
@@ -48,10 +48,11 @@ def test_shortcuts_are_the_familiar_ones(bar):
     assert shortcuts["&Undo"] == "Ctrl+Z" and shortcuts["&Redo"] == "Ctrl+Y"
     assert shortcuts["Cu&t"] == "Ctrl+X" and shortcuts["&Copy"] == "Ctrl+C" and shortcuts["&Paste"] == "Ctrl+V"
     assert shortcuts["&Dashboard"] == "Ctrl+1" and shortcuts["&Full screen"] == "F11"
+    assert shortcuts["&Terminal"] == "Ctrl+`"  # as in VS Code
 
 
 def test_side_bar_and_full_screen_are_on_off_items(bar):
-    assert bar.toggle_side_bar.isCheckable() and bar.full_screen.isCheckable()
+    assert bar.toggle_side_bar.isCheckable() and bar.full_screen.isCheckable() and bar.toggle_terminal.isCheckable()
     assert not bar.view_dashboard.isCheckable()
 
 

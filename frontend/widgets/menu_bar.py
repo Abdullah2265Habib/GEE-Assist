@@ -63,6 +63,7 @@ class AppMenuBar(QMenuBar):
         self.view_account = self._action(self.view_menu, "&Account", "Ctrl+4")
         self.view_menu.addSeparator()
         self.toggle_side_bar = self._action(self.view_menu, "&Side bar", "Ctrl+B", checkable=True)
+        self.toggle_terminal = self._action(self.view_menu, "&Terminal", "Ctrl+`", checkable=True)
         self.full_screen = self._action(self.view_menu, "&Full screen", "F11", checkable=True)
         self.view_menu.addSeparator()
         self.theme_menu = self.view_menu.addMenu("&Theme")
