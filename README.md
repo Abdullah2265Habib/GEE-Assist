@@ -88,7 +88,8 @@ One-time setup:
 
 1. Register a Google Cloud project for Earth Engine at <https://code.earthengine.google.com/register>.
 2. Put its ID in `.env`: `GEE_PROJECT=your-project-id`.
-3. Sign in once on this computer: `earthengine authenticate` (with the venv active).
+3. Sign in once on this computer: type `gee login` in gkonsol, or run `earthengine authenticate`
+   in a command prompt (with the venv active). `gee verify` checks the whole set-up.
 
 Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
 **Start Download** under Kept Requests. The **Downloads** page (dashboard card or side bar)
@@ -136,3 +137,5 @@ How it works:
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
 | Downloads page | `frontend/views/download_view.py`, `frontend/widgets/download_rows.py`, `speed_chart.py` |
+| gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
+| Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |
