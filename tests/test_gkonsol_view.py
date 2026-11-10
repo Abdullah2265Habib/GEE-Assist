@@ -123,6 +123,17 @@ def test_columns_follow_the_width(view):
     assert view.columns > narrow >= 20
 
 
+def test_a_hidden_view_keeps_the_width_it_was_last_shown_at(view):
+    assert view.columns == 100  # never shown yet
+    view.show()
+    view.resize(400, 200)
+    QApplication.processEvents()
+    shown = view.columns
+    view.hide()
+    view.resize(150, 200)
+    assert view.columns == shown != 100
+
+
 def test_a_writer_can_print_into_the_view(view):
     out = Writer(view)
     out.success("Signed in")
