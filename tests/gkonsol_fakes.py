@@ -26,16 +26,20 @@ class StepScheduler:
     def call_later(self, seconds, callback):
         self.timers.append((seconds, callback))
 
+    def run_next(self):
+        """Run the first waiting task and deliver its result."""
+        fn, args, on_success, on_error = self.tasks.pop(0)
+        try:
+            result = fn(*args)
+        except Exception as exc:
+            on_error(exc)
+        else:
+            on_success(result)
+
     def finish_tasks(self):
         """Run the waiting tasks (and any they lead to), delivering their results."""
         while self.tasks:
-            fn, args, on_success, on_error = self.tasks.pop(0)
-            try:
-                result = fn(*args)
-            except Exception as exc:
-                on_error(exc)
-            else:
-                on_success(result)
+            self.run_next()
 
     def fire_timers(self):
         timers, self.timers = self.timers, []
