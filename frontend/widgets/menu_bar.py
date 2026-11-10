@@ -1,7 +1,8 @@
 """Menu bar along the top of the signed-in window, like the classic one in Word or Excel.
 
-File, Edit, View, Options and Help, each with keyboard shortcuts shown next to its
-items. The Edit commands act on the text field that has the cursor, as in Word;
+File, Edit, View, Terminal, Options and Help, each with keyboard shortcuts shown next
+to its items. The Terminal menu is gkonsol's, as VS Code has one for its terminal.
+The Edit commands act on the text field that has the cursor, as in Word;
 items that cannot apply are greyed out while the menu is open. The other actions
 are given their meaning by the window the menu bar belongs to (see ``HomeWindow``).
 """
@@ -76,6 +77,17 @@ class AppMenuBar(QMenuBar):
             action.triggered.connect(lambda _=False, name=name: self._choose_theme(name))
             group.addAction(action)
             self.theme_actions[name] = action
+
+        self.terminal_menu = self._menu("&Terminal")
+        self.terminal_menu.setToolTipsVisible(True)
+        # Ctrl+` belongs to View → Terminal; after the tab, the menu only shows it.
+        self.show_terminal = self._action(self.terminal_menu, "&Show terminal\tCtrl+`", checkable=True)
+        self.show_terminal.setToolTip("Show or hide gkonsol, the command line (Ctrl+`)")
+        self.maximize_terminal = self._action(self.terminal_menu, "&Maximise terminal", checkable=True)
+        self.maximize_terminal.setToolTip("Let the terminal fill the window")
+        self.clear_terminal = self._action(self.terminal_menu, "&Clear terminal")
+        self.stop_command = self._action(self.terminal_menu, "S&top running command")
+        self.stop_command.setToolTip("Stop the command that is running, as Ctrl+C does in the terminal")
 
         self.options_menu = self._menu("&Options")
         self.chunk_size = self._action(self.options_menu, "Download &chunk size…")

@@ -29,7 +29,7 @@ def _items(menu):
 
 
 def test_has_the_classic_menus_in_order(bar):
-    assert [action.text() for action in bar.actions()] == ["&File", "&Edit", "&View", "&Options", "&Help"]
+    assert [action.text() for action in bar.actions()] == ["&File", "&Edit", "&View", "&Terminal", "&Options", "&Help"]
 
 
 def test_menus_hold_the_expected_items(bar):
@@ -37,6 +37,8 @@ def test_menus_hold_the_expected_items(bar):
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "&Side bar",
                                      "&Terminal", "&Full screen", "&Theme"]
+    assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
+                                             "S&top running command"]
     assert _items(bar.options_menu) == ["Download &chunk size…", "&Manage users…"]
     assert _items(bar.help_menu) == ["&About GEE-Assist"]
 
@@ -49,6 +51,13 @@ def test_shortcuts_are_the_familiar_ones(bar):
     assert shortcuts["Cu&t"] == "Ctrl+X" and shortcuts["&Copy"] == "Ctrl+C" and shortcuts["&Paste"] == "Ctrl+V"
     assert shortcuts["&Dashboard"] == "Ctrl+1" and shortcuts["&Full screen"] == "F11"
     assert shortcuts["&Terminal"] == "Ctrl+`"  # as in VS Code
+
+
+def test_the_terminal_menu_shows_the_terminal_shortcut_without_taking_it(bar):
+    assert bar.show_terminal.shortcut().isEmpty()  # Ctrl+` is View → Terminal's: one action per shortcut
+    assert bar.show_terminal.text().endswith("	Ctrl+`")
+    assert bar.show_terminal.isCheckable() and bar.maximize_terminal.isCheckable()
+    assert bar.terminal_menu.toolTipsVisible()
 
 
 def test_side_bar_and_full_screen_are_on_off_items(bar):
