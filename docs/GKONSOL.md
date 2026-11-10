@@ -36,19 +36,46 @@ in VS Code. It is hidden until you open it.
 
 | To … | Do this |
 |---|---|
-| Open or hide the terminal | Click **Terminal** in the side bar (the `>_` icon), or **View → Terminal**, or press **Ctrl+`** |
+| Open or hide the terminal | Click **Terminal** in the side bar (the `>_` icon), or **Terminal → Show terminal** in the menu bar, or **View → Terminal**, or press **Ctrl+`** |
 | Make it taller or shorter | Drag the line between the page and the terminal |
-| Give it the whole window | Click **⌃** (Maximise) in the terminal's header, drag the line to the top, or type `panel max` |
-| Give the page its room back | Click **⌄** (Restore), drag the line down, or type `panel restore` |
+| Give it the whole window | Click **⌃** (Maximise) in the terminal's header, **Terminal → Maximise terminal**, drag the line to the top, or type `panel max` |
+| Give the page its room back | Click **⌄** (Restore), untick **Terminal → Maximise terminal**, drag the line down, or type `panel restore` |
 | Set an exact height | `panel height 400` |
-| Clear the output | Click the bin in the header, press **Ctrl+L**, or type `clear` |
+| Clear the output | Click the bin in the header, **Terminal → Clear terminal**, press **Ctrl+L**, or type `clear` |
+| Stop the running command | Press **Ctrl+C** in the terminal, or **Terminal → Stop running command** |
 | Hide it | Click **×** in the header, press **Ctrl+`**, or type `exit` |
 
 - The side bar's Terminal button is highlighted while the terminal is open, and
-  **View → Terminal** is ticked.
+  **Terminal → Show terminal** and **View → Terminal** are ticked.
 - Hiding the terminal keeps its output, its history and a running command.
 - The height you leave it at is remembered the next time GEE-Assist starts.
 - The terminal uses the app's theme (light, dark blue-green or dark grey).
+
+### The Terminal menu
+
+The menu bar along the top has a **Terminal** menu (between View and Options, **Alt+T**),
+as VS Code has one for its terminal:
+
+| Item | What it does |
+|---|---|
+| **Show terminal** (Ctrl+`) | Shows or hides the terminal |
+| **Maximise terminal** | Lets the terminal fill the window, or gives the page its room back |
+| **Clear terminal** | Clears the output, as `clear` does |
+| **Stop running command** | Stops the running command, as **Ctrl+C** does; greyed out when nothing runs |
+| **Check everything** | Runs `doctor` |
+| **Verify Earth Engine sign-in** | Runs `gee verify` |
+| **Sign in to Earth Engine…** | Runs `gee login` |
+| **Verify my session** | Runs `session verify` |
+| **Watch download progress** | Runs `download watch` |
+| **Download speed chart** | Runs `download speed` |
+| **List downloads** | Runs `download list` |
+| **gkonsol help** | Runs `help` |
+| **Command reference** | Opens this document (`docs/GKONSOL.md`) in the app your computer opens `.md` files with; if none can, shows `help` in the terminal |
+
+The items that run a command open the terminal if it is hidden and type the command in it,
+so you see exactly what ran — and can type it yourself next time. Hovering an item shows
+the command it runs. While another command is still running or waiting for an answer, an
+item does not run (it would be taken as the answer); the terminal says so.
 
 ## 2. Typing commands
 
@@ -119,7 +146,8 @@ gkonsol prints the command a reference stood for before running it.
 Some commands wait for a server (`gee verify`, `session verify`), and some keep running
 until you stop them (`download watch`, `download speed`). While a command runs, the prompt
 shows a spinner and what it is waiting for, for example
-`⠙ Checking Earth Engine…  (Ctrl+C to stop)`. Press **Ctrl+C** to stop it. Stopping
+`⠙ Checking Earth Engine…  (Ctrl+C to stop)`. Press **Ctrl+C** (or **Terminal → Stop running
+command**) to stop it. Stopping
 `download watch` stops the *watching*, not the download.
 
 ### Questions
