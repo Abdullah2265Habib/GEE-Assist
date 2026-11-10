@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton  # no
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
+from frontend.gkonsol.history import GkonsolStore  # noqa: E402
 from frontend.views import home_window  # noqa: E402
 from frontend.views.home_window import HomeWindow  # noqa: E402
 
@@ -38,13 +39,17 @@ def _user(role: str = "user") -> UserDTO:
 
 
 @pytest.fixture
-def home(app, monkeypatch):
+def home(app, monkeypatch, tmp_path):
     monkeypatch.setattr(home_window, "MainWindow", StubQueryWorkspace)
+    # The terminal keeps its history and height in a file of the test's own.
+    monkeypatch.setattr(home_window, "GkonsolStore", lambda: GkonsolStore(tmp_path / "gkonsol.json"))
     facade = MagicMock(spec=IBusinessFacade)
     facade.list_downloads.return_value = []
     facade.get_chunk_size_mb.return_value = 500
+    facade.get_current_user.return_value = _user()
     window = HomeWindow(facade, _user())
     yield window
+    window.terminal.shutdown()
     window.deleteLater()
 
 
