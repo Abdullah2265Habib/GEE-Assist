@@ -86,6 +86,9 @@ class BusinessFacade(IBusinessFacade):
     def submit_form(self, form: FormDTO) -> ValidationDTO:
         return self._request_service.validate_form(form)
 
+    def check_form(self, form: FormDTO) -> ValidationDTO:
+        return self._request_service.check_form(form)
+
     def import_aoi(self, file_path: str) -> str:
         return self._request_service.import_aoi(file_path)
 

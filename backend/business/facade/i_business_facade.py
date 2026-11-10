@@ -75,6 +75,10 @@ class IBusinessFacade(ABC):
     def submit_form(self, form: FormDTO) -> ValidationDTO: ...
 
     @abstractmethod
+    def check_form(self, form: FormDTO) -> ValidationDTO:
+        """Validate the parameters without keeping them."""
+
+    @abstractmethod
     def import_aoi(self, file_path: str) -> str: ...
 
     @abstractmethod
