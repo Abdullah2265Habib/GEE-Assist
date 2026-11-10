@@ -209,3 +209,25 @@ def test_commands_resize_the_terminal(area):
     assert area.is_terminal_maximized()
     area.terminal.shell.submit("exit")
     assert not area.is_terminal_visible()
+
+
+# ------------------------------------------------------------------ for the Terminal menu
+def test_run_command_runs_a_line_as_if_typed(panel):
+    assert panel.run_command("echo from the menu") is True
+    assert panel.view.toPlainText().endswith("ayesha@gkonsol ~ $ echo from the menu\nfrom the menu")
+
+
+def test_run_command_does_not_answer_a_question(panel):
+    _type(panel, "signout")
+    assert panel.run_command("doctor") is False
+    assert panel.shell.runner.asking is not None  # still asking: "doctor" was not taken as the answer
+    assert "'doctor' did not run: a command is still running" in panel.view.toPlainText()
+
+
+def test_stop_command_stops_what_runs(panel):
+    panel.fake.list_downloads.return_value = []
+    panel.run_command("download speed")
+    assert panel.shell.running is not None
+    panel.stop_command()
+    assert panel.shell.running is None and _plain(panel.prompt.text()) == "ayesha@gkonsol ~ $ "
+    panel.stop_command()  # nothing runs: nothing happens
