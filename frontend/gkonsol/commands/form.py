@@ -187,7 +187,7 @@ def _set_bands(ctx: Context, values: list[str]) -> str:
             raise UsageError(f"{info.name} has no band {', '.join(unknown)}. Its bands: {' '.join(info.bands)}")
         bands = list(dict.fromkeys(by_name[word.lower()] for word in words))
     ctx.form.set_bands(bands)
-    return f"bands = {', '.join(bands)}"
+    return f"bands = {', '.join(ctx.form.current().bands)}"  # as the form holds them (in the dataset's order)
 
 
 def _set_scale(ctx: Context, values: list[str]) -> str:
