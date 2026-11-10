@@ -399,3 +399,45 @@ def test_closing_the_window_stops_a_running_command(home):
     assert home.terminal.shell.running is not None
     home.close()
     assert home.terminal.shell.running is None
+
+
+# ------------------------------------------------------------------ the Terminal menu
+def test_terminal_menu_shows_the_terminal_in_step_with_the_side_bar_and_view_menu(home):
+    home.show()
+    home.menu_bar.show_terminal.trigger()
+    assert home.terminal_area.is_terminal_visible()
+    assert home.terminal_button.isChecked() and home.menu_bar.toggle_terminal.isChecked()
+    home.terminal_button.click()  # closed from the side bar: the menu follows
+    assert not home.menu_bar.show_terminal.isChecked() and not home.terminal_area.is_terminal_visible()
+    home.hide()
+
+
+def test_terminal_menu_maximises_and_clears(home):
+    home.show()
+    home.menu_bar.maximize_terminal.trigger()
+    assert home.terminal_area.is_terminal_visible() and home.terminal_area.is_terminal_maximized()
+    home.terminal.shell.submit("echo something")
+    home.menu_bar.clear_terminal.trigger()
+    assert home.terminal.view.toPlainText() == ""
+    home.menu_bar.maximize_terminal.trigger()
+    assert not home.terminal_area.is_terminal_maximized()
+    home.hide()
+
+
+def test_terminal_menu_offers_stop_only_while_a_command_runs(home):
+    home.menu_bar.terminal_menu.aboutToShow.emit()
+    assert not home.menu_bar.stop_command.isEnabled()
+    home.terminal.shell.submit("download speed")  # runs until stopped
+    home.menu_bar.terminal_menu.aboutToShow.emit()
+    assert home.menu_bar.stop_command.isEnabled()
+    home.menu_bar.stop_command.trigger()
+    assert home.terminal.shell.running is None
+
+
+def test_terminal_menu_ticks_maximise_when_the_header_button_maximised(home):
+    home.show()
+    home.toggle_terminal()
+    home.terminal.maximize_button.click()
+    home.menu_bar.terminal_menu.aboutToShow.emit()
+    assert home.menu_bar.maximize_terminal.isChecked()
+    home.hide()
