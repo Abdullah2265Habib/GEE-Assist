@@ -441,3 +441,21 @@ def test_terminal_menu_ticks_maximise_when_the_header_button_maximised(home):
     home.menu_bar.terminal_menu.aboutToShow.emit()
     assert home.menu_bar.maximize_terminal.isChecked()
     home.hide()
+
+
+def test_terminal_menu_commands_open_the_terminal_and_run_there(home):
+    home.show()
+    home.menu_bar.terminal_commands["download list"].trigger()
+    assert home.terminal_area.is_terminal_visible()
+    assert "ayesha@gkonsol ~ $ download list" in home.terminal.view.toPlainText()  # typed for you to see
+    assert "No downloads yet." in home.terminal.view.toPlainText()
+    home.hide()
+
+
+def test_terminal_menu_commands_wait_for_a_question_to_be_answered(home):
+    home.terminal.shell.submit("signout")  # asks "Sign out of GEE-Assist? [y/N]"
+    signed_out = []
+    home.signed_out.connect(signed_out.append)
+    home.menu_bar.terminal_commands["help"].trigger()
+    assert home.terminal.shell.runner.asking is not None and signed_out == []
+    assert "'help' did not run" in home.terminal.view.toPlainText()
