@@ -123,10 +123,12 @@ def table(
 ) -> list[Line]:
     """A table with a header line. ``align`` has one letter per column: l(eft) or r(ight).
 
-    ``styles`` gives each column a style. When the table is wider than ``max_width``,
-    the widest column is shortened (with "…") until it fits.
+    ``styles`` gives each column a style; a cell that is a ``Span`` keeps its own. When
+    the table is wider than ``max_width``, the widest column is shortened (with "…")
+    until it fits.
     """
-    cells = [[str(value) for value in row] for row in rows]
+    cell_styles = [[value.style if isinstance(value, Span) else None for value in row] for row in rows]
+    cells = [[value.text if isinstance(value, Span) else str(value) for value in row] for row in rows]
     widths = [max([len(header)] + [len(row[i]) for row in cells if i < len(row)]) for i, header in enumerate(headers)]
     gap = 2
     if max_width > 0:
@@ -138,13 +140,14 @@ def table(
         return text.rjust(widths[i]) if i < len(align) and align[i] == "r" else text.ljust(widths[i])
 
     lines = [[Span((" " * gap).join(cell(h, i) for i, h in enumerate(headers)).rstrip(), HEADING)]]
-    for row in cells:
+    for row, own_styles in zip(cells, cell_styles):
         spans = []
         for i in range(len(headers)):
             text = cell(row[i] if i < len(row) else "", i)
             if i == len(headers) - 1:
                 text = text.rstrip()
-            spans.append(Span(text, styles[i] if i < len(styles) else TEXT))
+            style = own_styles[i] if i < len(own_styles) and own_styles[i] else None
+            spans.append(Span(text, style or (styles[i] if i < len(styles) else TEXT)))
             if i < len(headers) - 1:
                 spans.append(Span(" " * gap))
         lines.append(spans)
