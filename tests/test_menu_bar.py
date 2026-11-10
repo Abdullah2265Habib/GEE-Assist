@@ -128,3 +128,22 @@ def test_choosing_another_theme_asks_for_it(bar):
 
     bar.show_current_theme()                    # e.g. switching was cancelled
     assert bar.theme_actions["light"].isChecked() and not bar.theme_actions["dark-grey"].isChecked()
+
+
+def test_terminal_menu_items_run_gkonsol_commands(bar):
+    assert _items(bar.terminal_menu)[4:] == [
+        "Check &everything", "&Verify Earth Engine sign-in", "Sign &in to Earth Engine…", "Verify my sessi&on",
+        "&Watch download progress", "Download s&peed chart", "&List downloads", "gkonsol &help",
+    ]
+    ran = []
+    bar.terminal_command.connect(ran.append)
+    for action in bar.terminal_commands.values():
+        action.trigger()
+    assert ran == ["doctor", "gee verify", "gee login", "session verify", "download watch", "download speed",
+                   "download list", "help"]
+    assert bar.terminal_commands["gee verify"].toolTip() == "Runs 'gee verify' in the terminal"
+
+
+def test_terminal_menu_mnemonics_differ(bar):
+    letters = [text.split("&")[1][0].lower() for text in _items(bar.terminal_menu) if "&" in text]
+    assert len(letters) == len(set(letters))  # Alt+T, then one letter per item
