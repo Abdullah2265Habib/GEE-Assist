@@ -59,6 +59,29 @@ Run the tests with `python -m pytest`.
   (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
 
+## gkonsol, the command line
+
+gkonsol is a terminal inside GEE-Assist, below the pages as in VS Code. Open it with the side
+bar's **Terminal** button, **View → Terminal** or **Ctrl+`**; drag the line above it to make it
+taller or shorter, or maximise it from its header. Everything the window does can be done with
+a command, for example:
+
+```
+gee verify                                   check the Earth Engine sign-in step by step
+gee login                                    sign in to Earth Engine in the browser
+whoami / user info / session verify          your account and session
+form set dataset landsat-8                   fill the parameter form (or: form wizard, ask ...)
+form aoi bbox 74.20 31.40 74.45 31.60
+form submit
+download start                               download with a live progress bar, speed and ETA
+download speed                               the live download speed as a chart
+doctor                                       check everything at once
+```
+
+Type `help` for every command and `help <command>` for one. Its commands work only inside
+GEE-Assist: they are not Windows, PowerShell or cmd commands. Every command is described in
+[docs/GKONSOL.md](docs/GKONSOL.md).
+
 ## Downloading datasets (Google Earth Engine)
 
 One-time setup:
