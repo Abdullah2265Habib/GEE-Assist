@@ -48,6 +48,10 @@ Run the tests with `python -m pytest`.
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
     Terminal (Ctrl+`), Full screen (F11), Theme
+  - **Terminal** (gkonsol's, as in VS Code): Show terminal (Ctrl+`), Maximise terminal, Clear terminal,
+    Stop running command; Check everything, Verify Earth Engine sign-in, Sign in to Earth Engine…,
+    Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
+    which run that command in the terminal; Command reference (opens docs/GKONSOL.md)
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: About GEE-Assist
 - Navigation is in a side bar on the left: **Query Input**, **Downloads** and **Terminal**, each with
