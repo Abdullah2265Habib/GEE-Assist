@@ -36,7 +36,7 @@ from backend.business.download.speed_meter import SpeedMeter
 from backend.config import get_dataset
 from backend.config.download_settings import DEFAULT_RETRY_LIMIT, DownloadSettingsStore
 from backend.data.i_data_facade import IDataFacade
-from backend.dto import ChunkDTO, DatasetDTO, DownloadJobDTO, FormDTO
+from backend.dto import CheckDTO, ChunkDTO, DatasetDTO, DownloadJobDTO, FormDTO
 from backend.dto.download_dto import (
     CHUNK_DOWNLOADED,
     CHUNK_DOWNLOADING,
@@ -200,6 +200,18 @@ class DownloadService(IDownloadService):
 
     def is_gee_available(self) -> bool:
         return self._data_facade.validate_access()
+
+    def check_gee_setup(self) -> list[CheckDTO]:
+        return self._data_facade.diagnose_gee()
+
+    def begin_gee_sign_in(self) -> str:
+        return self._data_facade.begin_gee_sign_in()
+
+    def complete_gee_sign_in(self, should_stop: Optional[Callable[[], bool]] = None) -> str:
+        return self._data_facade.complete_gee_sign_in(should_stop)
+
+    def cancel_gee_sign_in(self) -> None:
+        self._data_facade.cancel_gee_sign_in()
 
     def shutdown(self, timeout: float = 5.0) -> None:
         """Pause the active download (it resumes next time) and stop the worker."""

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.data.clients.i_gee_client import ProgressCallback, StopCheck
-from backend.dto import ChunkDTO, FormDTO
+from backend.dto import CheckDTO, ChunkDTO, FormDTO
 
 
 class IDataFacade(ABC):
@@ -32,3 +32,19 @@ class IDataFacade(ABC):
     @abstractmethod
     def validate_access(self) -> bool:
         """True if Google Earth Engine can be used (delegates to IGEEClient)."""
+
+    @abstractmethod
+    def diagnose_gee(self) -> list[CheckDTO]:
+        """The Earth Engine set-up checked step by step (delegates to IGEEClient)."""
+
+    @abstractmethod
+    def begin_gee_sign_in(self) -> str:
+        """Start the Earth Engine browser sign-in; returns the page to open (delegates to IGEEClient)."""
+
+    @abstractmethod
+    def complete_gee_sign_in(self, should_stop: Optional[StopCheck] = None) -> str:
+        """Wait for the browser and save the sign-in; returns the credentials file (delegates to IGEEClient)."""
+
+    @abstractmethod
+    def cancel_gee_sign_in(self) -> None:
+        """Stop waiting for the Earth Engine browser sign-in (delegates to IGEEClient)."""

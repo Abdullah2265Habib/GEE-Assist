@@ -73,6 +73,22 @@ class RequestService(IRequestService):
     # UC-03 Fill Parameter Form               (branch: query-input-form)
     # ------------------------------------------------------------------
     def validate_form(self, form: FormDTO) -> ValidationDTO:
+        result, geometry, output_dir = self._check(form)
+
+        # 9. keep validated parameters
+        if result.is_valid:
+            crs = utm_epsg_for(geometry) if form.crs == AUTO_UTM else form.crs
+            processes = form.processes if form.analysis_type else []
+            self._keep(replace(form, source="form", crs=crs, output_dir=output_dir, processes=processes))
+            result.message = "Parameters accepted and kept."
+        return result
+
+    def check_form(self, form: FormDTO) -> ValidationDTO:
+        """The checks of ``validate_form`` without keeping the form (e.g. gkonsol's ``form validate``)."""
+        return self._check(form)[0]
+
+    def _check(self, form: FormDTO) -> tuple[ValidationDTO, dict | None, str]:
+        """Validate ``form``. Returns the result, the AOI geometry (when valid) and the output folder."""
         result = ValidationDTO()
         info = get_dataset(form.dataset)
 
@@ -153,15 +169,8 @@ class RequestService(IRequestService):
             if unsupported:
                 result.add_error("processes", f"Unsupported processes: {', '.join(unsupported)}.")
 
-        # 9. keep validated parameters
-        if result.is_valid:
-            crs = utm_epsg_for(geometry) if form.crs == AUTO_UTM else form.crs
-            processes = form.processes if form.analysis_type else []
-            self._keep(replace(form, source="form", crs=crs, output_dir=output_dir, processes=processes))
-            result.message = "Parameters accepted and kept."
-        else:
-            result.message = "Please correct the highlighted fields."
-        return result
+        result.message = "All parameters are valid." if result.is_valid else "Please correct the highlighted fields."
+        return result, geometry, output_dir
 
     # ------------------------------------------------------------------
     # UC-04 Import GeoJSON                    (branch: query-input-form)

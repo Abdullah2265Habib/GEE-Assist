@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -425,6 +426,23 @@ def test_gee_access_comes_from_the_data_facade(env):
     service = make()
     data.gee_ok = False
     assert service.is_gee_available() is False
+
+
+def test_gee_checks_and_sign_in_come_from_the_data_facade(env):
+    make, data, _ = env
+    service = make()
+    data.diagnose_gee = MagicMock(return_value=["checks"])
+    data.begin_gee_sign_in = MagicMock(return_value="https://accounts.google.com/")
+    data.complete_gee_sign_in = MagicMock(return_value="credentials")
+    data.cancel_gee_sign_in = MagicMock()
+    stop = MagicMock()
+
+    assert service.check_gee_setup() == ["checks"]
+    assert service.begin_gee_sign_in() == "https://accounts.google.com/"
+    assert service.complete_gee_sign_in(stop) == "credentials"
+    data.complete_gee_sign_in.assert_called_once_with(stop)
+    service.cancel_gee_sign_in()
+    data.cancel_gee_sign_in.assert_called_once_with()
 
 
 def test_folder_name_uses_the_satellite_and_aoi_centre(tmp_path):

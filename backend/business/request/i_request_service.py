@@ -20,6 +20,10 @@ class IRequestService(ABC):
         """UC-03: validate the form parameters; valid forms are kept."""
 
     @abstractmethod
+    def check_form(self, form: FormDTO) -> ValidationDTO:
+        """UC-03 checks only: like ``validate_form``, but the form is not kept."""
+
+    @abstractmethod
     def import_aoi(self, file_path: str) -> str:
         """UC-04: read a GeoJSON file and return its geometry as a JSON string."""
 

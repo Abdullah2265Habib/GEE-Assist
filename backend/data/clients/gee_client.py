@@ -21,16 +21,20 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional
 
 from backend.config import BYTES_PER_PIXEL, get_dataset
+from backend.data.clients.gee_sign_in import GEESignIn
 from backend.data.clients.gee_tiles import Tile, plan_tiles
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
-from backend.dto import ChunkDTO, FormDTO
+from backend.dto import CheckDTO, ChunkDTO, FormDTO
+from backend.dto.check_dto import CHECK_FAIL, CHECK_OK, CHECK_SKIP, CHECK_WARN
 from backend.exceptions import GEEError, GEERequestTooHeavyError, GEESetupError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,13 @@ class _Stopped(Exception):
     """The download was paused or cancelled while a response was streaming in."""
 NODATA = -9999.0           # value of pixels outside the AOI or without imagery
 
+# The steps of ``GEEClient.diagnose``, in order.
+CHECK_LIBRARY = "Earth Engine library"
+CHECK_PROJECT = "Cloud project (GEE_PROJECT)"
+CHECK_SIGN_IN = "Sign-in on this computer"
+CHECK_CONNECTION = "Connection"
+CHECK_REQUEST = "Test request"
+
 
 class GEEClient(IGEEClient):
     def __init__(
@@ -55,14 +66,82 @@ class GEEClient(IGEEClient):
         project: str = "",
         parallel_requests: int = PARALLEL_REQUESTS,
         max_request_bytes: int = REQUEST_BYTES,
+        sign_in: Optional[GEESignIn] = None,
     ):
         self._project = project
+        self._sign_in = sign_in or GEESignIn()
         self._parallel = max(1, parallel_requests)
         self._max_request_bytes = max_request_bytes
         self._initialized = False
         self._lock = threading.Lock()
         self._splits: dict[str, int] = {}  # request -> times its tiles had to be split
         self._sessions = threading.local()  # one HTTP session per download thread
+
+    # ------------------------------------------------------------- set-up checks
+    def diagnose(self) -> list[CheckDTO]:
+        """Check the Earth Engine set-up step by step (``validate_access`` does it in one go)."""
+        try:
+            ee = self._ee()
+        except GEESetupError as exc:
+            return [
+                CheckDTO(CHECK_LIBRARY, CHECK_FAIL, str(exc), "Install it: pip install earthengine-api"),
+                self._project_check(),
+                CheckDTO(CHECK_SIGN_IN, CHECK_SKIP, "Needs the Earth Engine library."),
+                CheckDTO(CHECK_CONNECTION, CHECK_SKIP, "Needs the Earth Engine library."),
+                CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection."),
+            ]
+        version = getattr(ee, "__version__", "")
+        checks = [
+            CheckDTO(CHECK_LIBRARY, CHECK_OK, f"earthengine-api {version}" if isinstance(version, str) else "Installed."),
+            self._project_check(),
+            _sign_in_check(ee),
+        ]
+        if not self._project:
+            return checks + [CheckDTO(CHECK_CONNECTION, CHECK_SKIP, "Needs GEE_PROJECT."),
+                             CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection.")]
+
+        started = time.perf_counter()
+        try:
+            self._initialize()
+        except GEEError as exc:
+            return checks + [CheckDTO(CHECK_CONNECTION, CHECK_FAIL, str(exc), duration_ms=_ms_since(started)),
+                             CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection.")]
+        checks.append(CheckDTO(CHECK_CONNECTION, CHECK_OK, f"Connected with project '{self._project}'.",
+                               duration_ms=_ms_since(started)))
+
+        started = time.perf_counter()
+        try:
+            ee.Number(1).getInfo()
+        except Exception as exc:
+            checks.append(CheckDTO(CHECK_REQUEST, CHECK_FAIL, str(_error(exc, self._project)),
+                                   duration_ms=_ms_since(started)))
+        else:
+            elapsed = _ms_since(started)
+            checks.append(CheckDTO(CHECK_REQUEST, CHECK_OK, f"Earth Engine answered in {elapsed:.0f} ms.",
+                                   duration_ms=elapsed))
+        return checks
+
+    def _project_check(self) -> CheckDTO:
+        if self._project:
+            return CheckDTO(CHECK_PROJECT, CHECK_OK, self._project)
+        return CheckDTO(
+            CHECK_PROJECT, CHECK_FAIL, "GEE_PROJECT is not set in .env.",
+            "Set GEE_PROJECT in .env to a Google Cloud project registered for Earth Engine "
+            "(https://code.earthengine.google.com/register), then restart GEE-Assist.",
+        )
+
+    # ------------------------------------------------------------- browser sign-in
+    def begin_sign_in(self) -> str:
+        return self._sign_in.begin()
+
+    def complete_sign_in(self, should_stop: Optional[StopCheck] = None) -> str:
+        path = self._sign_in.wait(should_stop)
+        with self._lock:
+            self._initialized = False  # connect again, with the new credentials
+        return path
+
+    def cancel_sign_in(self) -> None:
+        self._sign_in.cancel()
 
     # ------------------------------------------------------------- access
     def validate_access(self) -> bool:
@@ -460,6 +539,28 @@ class _TileProgress:
     def clear(self) -> None:
         self.done.clear()
         self.path.unlink(missing_ok=True)
+
+
+# ----------------------------------------------------------------------------- set-up checks
+def _sign_in_check(ee: Any) -> CheckDTO:
+    """Whether Earth Engine has been signed in on this computer (``earthengine authenticate``)."""
+    try:
+        path = str(ee.oauth.get_credentials_path())
+    except Exception:
+        path = ""
+    if path and os.path.isfile(path):
+        return CheckDTO(CHECK_SIGN_IN, CHECK_OK, f"Saved sign-in: {path}")
+    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        return CheckDTO(CHECK_SIGN_IN, CHECK_OK, "Service account key from GOOGLE_APPLICATION_CREDENTIALS.")
+    where = f" at {path}" if path else ""
+    return CheckDTO(
+        CHECK_SIGN_IN, CHECK_WARN, f"No saved Earth Engine sign-in{where}; other Google credentials are tried.",
+        "Sign in to Earth Engine on this computer (earthengine authenticate).",
+    )
+
+
+def _ms_since(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
 
 
 # ----------------------------------------------------------------------------- errors
