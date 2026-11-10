@@ -340,6 +340,11 @@ class HomeWindow(QMainWindow):
         self.menu_bar.toggle_terminal.setChecked(shown)
         self.menu_bar.show_terminal.setChecked(shown)
 
+    def run_in_terminal(self, line: str) -> None:
+        """Open the terminal and run ``line`` in it, as if it were typed (the Terminal menu's commands)."""
+        self.terminal_area.show_terminal()
+        self.terminal.run_command(line)
+
     def _update_terminal_menu(self) -> None:
         """Before the Terminal menu opens: tick Maximise if it is, and offer Stop only while a command runs."""
         self.menu_bar.maximize_terminal.setChecked(self.terminal_area.is_terminal_maximized())
@@ -375,6 +380,7 @@ class HomeWindow(QMainWindow):
         bar.maximize_terminal.triggered.connect(self.terminal_area.set_terminal_maximized)
         bar.clear_terminal.triggered.connect(self.terminal.shell.clear)
         bar.stop_command.triggered.connect(self.terminal.stop_command)
+        bar.terminal_command.connect(self.run_in_terminal)
         bar.full_screen.triggered.connect(self.set_full_screen)
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
         bar.manage_users.triggered.connect(self.open_user_admin)
