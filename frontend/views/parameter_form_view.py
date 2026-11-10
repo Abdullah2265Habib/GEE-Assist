@@ -763,16 +763,24 @@ class ParameterFormView(QWidget):
         )
 
     def _on_submit(self) -> None:
+        try:
+            self.submit()
+        except GeeAssistError:
+            pass  # shown in the status banner
+
+    def submit(self) -> ValidationDTO:
+        """Validate the form and keep it when valid (Submit Parameters). Errors show in the form too."""
         form = self.collect_form()
         try:
             result = self._facade.submit_form(form)
         except GeeAssistError as exc:
             self.status_banner.show_error(str(exc))
-            return
+            raise
 
         self._show_validation(result)
         if result.is_valid:
             self.request_kept.emit(form)
+        return result
 
     def _show_validation(self, result: ValidationDTO) -> None:
         for key in self._error_labels:
