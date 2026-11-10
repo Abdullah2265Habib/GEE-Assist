@@ -113,6 +113,21 @@ def test_header_buttons_maximise_and_hide(panel):
     assert panel.port.closed
 
 
+def test_the_prompt_follows_short_output_and_sits_at_the_bottom_of_long_output(panel):
+    QApplication.processEvents()
+    panel.fit_output()
+    QApplication.processEvents()  # the layout follows the new height
+    short = panel._input_row.geometry().top()
+    assert panel.view.maximumHeight() < panel.height() and short < panel.height() // 2
+    for n in range(80):
+        panel.shell.out.print(f"line {n}")
+    QApplication.processEvents()
+    panel.fit_output()
+    QApplication.processEvents()
+    assert panel.view.maximumHeight() > panel.height()  # no longer capped: the output scrolls
+    assert panel._input_row.geometry().bottom() >= panel.height() - 2
+
+
 def test_the_input_is_a_plain_line(panel):
     assert isinstance(panel.input, QLineEdit) and panel.input.font().fixedPitch()
 
