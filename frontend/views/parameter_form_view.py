@@ -704,6 +704,67 @@ class ParameterFormView(QWidget):
 
         return filled
 
+    # --------------------------------------------- setting fields (gkonsol's "form set")
+    # The values are checked by the caller; these put them in the fields as the user would.
+    def set_dataset(self, key: str) -> None:
+        index = self.dataset_combo.findData(key)
+        if index < 0:
+            raise ValueError(f"Unknown dataset {key!r}")
+        self.dataset_combo.setCurrentIndex(index)
+        self._on_dataset_changed()  # also when it was already chosen: its defaults come back
+
+    def set_bands(self, bands: list[str]) -> None:
+        self.bands_combo.set_checked(bands)  # the size estimate follows
+
+    def set_scale(self, metres: int) -> None:
+        self.scale_spin.setValue(metres)
+
+    def set_cloud_cover(self, percent: int) -> None:
+        self.cloud_spin.setValue(percent)
+
+    def set_composite(self, method: str) -> None:
+        self.composite_combo.setCurrentText(method)
+
+    def set_dates(self, start, end) -> None:
+        self.end_date_edit.setDate(_qdate(end))
+        self.start_date_edit.setDate(_qdate(start))
+        self._set_field_error("dates", "")
+
+    def set_drawn_area(self, aoi: str, name: str) -> None:
+        """Show ``aoi`` (GeoJSON) as the area drawn on the map, and switch to "Draw on map"."""
+        geometry = json.loads(aoi)
+        self.aoi_draw_toggle.setChecked(True)
+        self._on_aoi_mode_changed(AOI_DRAW)
+        self._set_drawn_shape(geometry, name, f"<b>{name}</b> · set in gkonsol.")
+        min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
+        self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+
+    def clear_area(self) -> None:
+        self._imported_aoi = ""
+        self._imported_name = ""
+        self.aoi_file_label.setText(NO_FILE_TEXT)
+        self.map_widget.show_geojson("")
+        self._clear_drawn_shape()
+        self.map_widget.clear_shape()
+
+    def set_crs(self, code: str) -> None:
+        index = self.crs_combo.findData(code)
+        if index < 0:
+            raise ValueError(f"Unknown projection {code!r}")
+        self.crs_combo.setCurrentIndex(index)
+
+    def set_output_dir(self, folder: str) -> None:
+        self.output_dir_edit.setText(folder)
+        self._set_field_error("output_dir", "")
+
+    def set_analysis(self, analysis_type: str, processes: list[str]) -> None:
+        index = self.analysis_combo.findData(analysis_type) if analysis_type else 0
+        if index < 0:
+            raise ValueError(f"Unknown analysis {analysis_type!r}")
+        self.analysis_combo.setCurrentIndex(index)
+        self._on_analysis_changed()
+        self.processes_grid.set_checked(processes)
+
     # ---------------------------------------------------------------- output
     def _on_browse_output(self) -> None:
         start = self.output_dir_edit.text().strip() or str(DEFAULT_DOWNLOAD_DIR)
