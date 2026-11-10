@@ -66,9 +66,9 @@ Run the tests with `python -m pytest`.
 ## gkonsol, the command line
 
 gkonsol is a terminal inside GEE-Assist, below the pages as in VS Code. Open it with the side
-bar's **Terminal** button, **View → Terminal** or **Ctrl+`**; drag the line above it to make it
-taller or shorter, or maximise it from its header. Everything the window does can be done with
-a command, for example:
+bar's **Terminal** button, the **Terminal** menu, **View → Terminal** or **Ctrl+`**; drag the line
+above it to make it taller or shorter, or maximise it from its header. Everything the window does
+can be done with a command, for example:
 
 ```
 gee verify                                   check the Earth Engine sign-in step by step
