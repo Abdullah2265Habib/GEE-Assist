@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from frontend.gkonsol.command import Registry
+from frontend.gkonsol.commands import general
+
+MODULES = (general,)
 
 
 def build_registry() -> Registry:
     """Every gkonsol command."""
     registry = Registry()
+    for module in MODULES:
+        module.register(registry)
     return registry
