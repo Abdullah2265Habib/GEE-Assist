@@ -1,12 +1,13 @@
 """Window shown after signing in.
 
-A menu bar along the top (File, Edit, View, Options, Help) over a side bar on the
+A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to four pages: the dashboard (start page), the query-input workspace, downloads and the
 account card. Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
-side bar's Terminal button or View → Terminal (Ctrl+`), and as tall as the user drags it.
+side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
+as the user drags it. The Terminal menu also runs common commands in it.
 """
 
 from __future__ import annotations
