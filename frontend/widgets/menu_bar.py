@@ -26,8 +26,28 @@ QMenuBar::item:pressed {{ background: {theme.MINT}; }}
 """ + theme.MENU_STYLE
 
 
+# Terminal menu items that run a gkonsol command, in groups: (label, the command typed in the terminal).
+TERMINAL_COMMANDS: tuple[tuple[tuple[str, str], ...], ...] = (
+    (
+        ("Check &everything", "doctor"),
+        ("&Verify Earth Engine sign-in", "gee verify"),
+        ("Sign &in to Earth Engine…", "gee login"),
+        ("Verify my sessi&on", "session verify"),
+    ),
+    (
+        ("&Watch download progress", "download watch"),
+        ("Download s&peed chart", "download speed"),
+        ("&List downloads", "download list"),
+    ),
+    (
+        ("gkonsol &help", "help"),
+    ),
+)
+
+
 class AppMenuBar(QMenuBar):
     theme_chosen = pyqtSignal(str)  # a theme other than the current one, e.g. "dark-green"
+    terminal_command = pyqtSignal(str)  # a gkonsol command to run in the terminal, e.g. "gee verify"
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -88,6 +108,14 @@ class AppMenuBar(QMenuBar):
         self.clear_terminal = self._action(self.terminal_menu, "&Clear terminal")
         self.stop_command = self._action(self.terminal_menu, "S&top running command")
         self.stop_command.setToolTip("Stop the command that is running, as Ctrl+C does in the terminal")
+        self.terminal_commands: dict[str, QAction] = {}  # gkonsol command -> its menu item
+        for items in TERMINAL_COMMANDS:
+            self.terminal_menu.addSeparator()
+            for label, command in items:
+                action = self._action(self.terminal_menu, label)
+                action.setToolTip(f"Runs '{command}' in the terminal")
+                action.triggered.connect(lambda _=False, command=command: self.terminal_command.emit(command))
+                self.terminal_commands[command] = action
 
         self.options_menu = self._menu("&Options")
         self.chunk_size = self._action(self.options_menu, "Download &chunk size…")
