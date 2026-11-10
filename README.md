@@ -47,13 +47,14 @@ Run the tests with `python -m pytest`.
   - **File**: New request (Ctrl+N), Sign out, Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
-    Full screen (F11), Theme
+    Terminal (Ctrl+`), Full screen (F11), Theme
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: About GEE-Assist
-- Navigation is in a side bar on the left: **Query Input** and **Downloads**, each with an icon that
-  animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding down into a
-  tray). It starts collapsed (icons only); clicking the logo slides it open (icons and names) or
-  closed again.
+- Navigation is in a side bar on the left: **Query Input**, **Downloads** and **Terminal**, each with
+  an icon that animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding
+  down into a tray; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
+  open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
+  highlighted while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
