@@ -20,8 +20,9 @@ TODAY = date(2026, 11, 6)
 
 
 class FakeDataFacade(IDataFacade):
-    def __init__(self, answer: FormDTO | None = None, error: Exception | None = None):
+    def __init__(self, answer: FormDTO | None = None, error: Exception | None = None, places=()):
         self.answer, self.error, self.prompts = answer, error, []
+        self.places, self.place_queries = list(places), []
 
     def process_query(self, prompt: str) -> FormDTO:
         self.prompts.append(prompt)
@@ -29,8 +30,9 @@ class FakeDataFacade(IDataFacade):
             raise self.error
         return self.answer
 
-    def search_places(self, query):  # not used here
-        raise NotImplementedError
+    def search_places(self, query):
+        self.place_queries.append(query)
+        return self.places
 
     def fetch_chunk(self, chunk, path, on_progress=None, should_stop=None) -> bool:  # not used here
         raise NotImplementedError
@@ -139,10 +141,8 @@ def test_dates_from_entities_only_fill_gaps():
     assert ground_with_entities(FormDTO(), entities("NDVI in 2020")).end_date == date(2020, 12, 31)
 
 
-def test_place_without_area_gets_a_note():
-    form = ground_with_entities(FormDTO(), entities("NDVI for Sahiwal"))
-    assert form.aoi_name == "Sahiwal" and any("Sahiwal" in n for n in form.notes)
-    assert not any("Sahiwal" in n for n in ground_with_entities(FormDTO(aoi=BOX), entities("NDVI for Sahiwal")).notes)
+def test_a_place_from_the_entities_names_the_area():
+    assert ground_with_entities(FormDTO(), entities("NDVI for Sahiwal")).aoi_name == "Sahiwal"
 
 
 # ----------------------------------------------------------- check_interpretation
