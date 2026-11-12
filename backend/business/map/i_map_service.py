@@ -27,3 +27,10 @@ class IMapService(ABC):
         Raises:
             MapError: the file cannot be read or lacks a band the preset needs.
         """
+
+    @abstractmethod
+    def values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]:
+        """Each band's value at a point, read from the full-resolution file.
+
+        A band has ``None`` where it has no data, and every band does outside the image.
+        """

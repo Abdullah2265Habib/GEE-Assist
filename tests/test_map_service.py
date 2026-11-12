@@ -231,3 +231,23 @@ def test_a_file_of_only_no_data_says_so(tmp_path):
     info = service.describe(str(path))
     view = service.render(info, service.view_presets(info)[0])
     assert (view.rgba[..., 3] == 0).all() and "nothing to show" in view.notes[-1]
+
+
+# ------------------------------------------------------------------ values at a point
+def test_values_at_a_point_come_from_the_full_resolution_file(scene):
+    service = MapService()
+    info = service.describe(str(scene))          # west 73.0, north 31.1, 0.001 degree pixels
+    west, south, east, north = info.bounds
+
+    vegetation = service.values_at(info, west + 0.0105, north - 0.0305)   # column 10, row 30
+    water = service.values_at(info, west + 0.0705, north - 0.0305)        # column 70
+    assert vegetation == {"B2": 400.0, "B3": 700.0, "B4": 500.0, "B8": 3500.0, "B11": 1000.0}
+    assert water["B8"] == 300.0
+
+
+def test_no_data_and_outside_the_image_have_no_values(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    west, south, east, north = info.bounds
+    assert set(service.values_at(info, west + 0.0015, north - 0.0015).values()) == {None}  # the no-data corner
+    assert set(service.values_at(info, west - 1, north + 1).values()) == {None}            # off the image

@@ -39,3 +39,28 @@ class MapService(IMapService):
 
     def render(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
         return raster_renderer.render(info, preset, max_size)
+
+    def values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]:
+        import rasterio
+        from rasterio.warp import transform
+        from rasterio.windows import Window
+
+        empty: dict[str, float | None] = {band: None for band in info.band_names}
+        try:
+            with rasterio.open(info.path) as src:
+                x, y = lon, lat
+                if src.crs and src.crs.to_epsg() != 4326:
+                    xs, ys = transform("EPSG:4326", src.crs, [lon], [lat])
+                    x, y = xs[0], ys[0]
+                row, col = src.index(x, y)
+                if not (0 <= row < src.height and 0 <= col < src.width):
+                    return empty
+                pixel = src.read(window=Window(col, row, 1, 1))[:, 0, 0]
+        except rasterio.errors.RasterioIOError as exc:
+            raise MapError(f"Cannot read {info.name}: {exc}") from exc
+        return {band: (None if _missing(value, info.nodata) else float(value))
+                for band, value in zip(info.band_names, pixel)}
+
+
+def _missing(value: float, nodata: float | None) -> bool:
+    return bool(value != value) or (nodata is not None and value == nodata)  # NaN, or the no-data value
