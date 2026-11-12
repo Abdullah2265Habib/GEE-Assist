@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from backend.dto.map_dto import RasterInfoDTO, ViewPresetDTO
+from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 
 
 class IMapService(ABC):
@@ -19,3 +19,11 @@ class IMapService(ABC):
     @abstractmethod
     def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
         """The ways the file can be shown (true colour, NDVI, ...), the default first."""
+
+    @abstractmethod
+    def render(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
+        """A preview of the file drawn for ``preset``, at most ``max_size`` pixels on its longer side.
+
+        Raises:
+            MapError: the file cannot be read or lacks a band the preset needs.
+        """

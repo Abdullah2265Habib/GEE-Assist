@@ -145,3 +145,89 @@ def test_a_single_band_without_known_colours_is_shown_on_its_own():
 def test_only_bands_that_were_downloaded_are_used():
     keys = [p.key for p in MapService().view_presets(_info("Sentinel-2", ("B4", "B8")))]
     assert keys == ["ndvi", "band:B4", "band:B8"]  # no blue/green: no true colour, no NDWI
+
+
+# ------------------------------------------------------------------ rendering
+def _preset(service, info, key):
+    return next(p for p in service.view_presets(info) if p.key == key)
+
+
+@pytest.fixture
+def scene(tmp_path):
+    """Sentinel-2 bands over a 60 x 80 grid: the left half vegetation, the right half water; one no-data corner."""
+    shape = (60, 80)
+    veg = np.zeros(shape, dtype=bool)
+    veg[:, :40] = True
+    bands = {
+        "B2": np.where(veg, 400, 900), "B3": np.where(veg, 700, 1200), "B4": np.where(veg, 500, 600),
+        "B8": np.where(veg, 3500, 300), "B11": np.full(shape, 1000),
+    }
+    for data in bands.values():
+        data[:5, :5] = NODATA
+    folder = tmp_path / "Sentinel-2_73.0400_31.0700_2023-01-01_2023-12-31"
+    folder.mkdir()
+    return write_tif(folder / f"{folder.name}.tif", {k: v.astype("float32") for k, v in bands.items()})
+
+
+def test_true_colour_preview_is_rgba_with_transparent_no_data(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    view = service.render(info, _preset(service, info, "true_colour"))
+
+    assert view.rgba.shape == (60, 80, 4) and view.rgba.dtype == np.uint8
+    assert (view.width, view.height, view.scale) == (80, 60, 1.0) and view.notes == []
+    assert view.rgba[0, 0, 3] == 0 and view.rgba[30, 30, 3] == 255      # no-data is see-through
+    assert view.legend.kind == "rgb" and view.legend.labels == ("B4", "B3", "B2")
+
+
+def test_ndvi_is_high_on_vegetation_and_low_on_water(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    view = service.render(info, _preset(service, info, "ndvi"))
+
+    green_vegetation, water = view.rgba[30, 10, :3].astype(int), view.rgba[30, 70, :3].astype(int)
+    assert green_vegetation[1] > green_vegetation[0]                   # the green end of the scale
+    assert water[0] > water[1]                                          # the red/brown end
+    assert view.legend.kind == "scale" and (view.legend.low, view.legend.high) == (-0.2, 0.8)  # fixed range
+    assert len(view.legend.colours) == 5
+
+
+def test_large_files_are_drawn_scaled_down(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    view = service.render(info, _preset(service, info, "band:B8"), max_size=20)
+    assert (view.width, view.height) == (20, 15) and view.scale == pytest.approx(4.0)
+    assert view.notes == ["Shown at 1/4.0 of full resolution."]
+
+
+def test_dynamic_world_classes_use_their_colours_and_list_only_present_ones(tmp_path):
+    labels = np.zeros((10, 10), dtype="float32")   # water
+    labels[:, 5:] = 6                              # built area
+    labels[0, 0] = NODATA
+    folder = tmp_path / "Dynamic-World_73.0000_31.0000_2023-01-01_2023-12-31"
+    folder.mkdir()
+    path = write_tif(folder / f"{folder.name}.tif", {"label": labels})
+    service = MapService()
+    info = service.describe(str(path))
+    view = service.render(info, _preset(service, info, "classes"))
+
+    assert view.rgba[5, 2, :3].tolist() == [0x41, 0x9B, 0xDF] and view.rgba[5, 8, :3].tolist() == [0xC4, 0x28, 0x1B]
+    assert view.rgba[0, 0, 3] == 0
+    assert view.legend.labels == ("Water", "Built area") and view.legend.colours == ("#419BDF", "#C4281B")
+
+
+def test_a_preset_needing_a_missing_band_is_refused(scene):
+    from backend.dto.map_dto import ViewPresetDTO
+
+    service = MapService()
+    info = service.describe(str(scene))
+    with pytest.raises(MapError, match="no band B12"):
+        service.render(info, ViewPresetDTO("band:B12", "Band B12", "band", ("B12",)))
+
+
+def test_a_file_of_only_no_data_says_so(tmp_path):
+    path = write_tif(tmp_path / "empty.tif", {"B1": np.full((8, 8), NODATA, dtype="float32")})
+    service = MapService()
+    info = service.describe(str(path))
+    view = service.render(info, service.view_presets(info)[0])
+    assert (view.rgba[..., 3] == 0).all() and "nothing to show" in view.notes[-1]

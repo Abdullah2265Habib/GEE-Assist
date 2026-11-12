@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.business.download.naming import parse_dataset_name
+from backend.business.map import raster_renderer
 from backend.business.map.i_map_service import IMapService
 from backend.business.map.view_presets import presets_for
-from backend.dto.map_dto import RasterInfoDTO, ViewPresetDTO
+from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.exceptions import MapError
 
 
@@ -35,3 +36,6 @@ class MapService(IMapService):
 
     def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
         return presets_for(info)
+
+    def render(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
+        return raster_renderer.render(info, preset, max_size)
