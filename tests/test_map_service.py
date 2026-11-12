@@ -1,0 +1,269 @@
+"""MapService: reading downloaded GeoTIFFs so they can be shown."""
+
+import numpy as np
+import pytest
+
+rasterio = pytest.importorskip("rasterio")
+from rasterio.transform import from_origin  # noqa: E402
+
+from backend.business.map import MapService  # noqa: E402
+from backend.exceptions import MapError  # noqa: E402
+
+NODATA = -9999.0
+
+
+def write_tif(path, bands: dict, crs="EPSG:4326", origin=(73.0, 31.1), pixel=0.001):
+    """A small float32 GeoTIFF with one band per entry of ``bands`` (name -> 2-D array)."""
+    arrays = list(bands.values())
+    height, width = arrays[0].shape
+    with rasterio.open(path, "w", driver="GTiff", width=width, height=height, count=len(arrays), dtype="float32",
+                       crs=crs, transform=from_origin(origin[0], origin[1], pixel, pixel), nodata=NODATA) as dst:
+        for index, (name, data) in enumerate(bands.items(), start=1):
+            dst.write(data.astype("float32"), index)
+            dst.set_band_description(index, name)
+    return path
+
+
+@pytest.fixture
+def sentinel_tif(tmp_path):
+    shape = (40, 50)
+    bands = {name: np.full(shape, value, dtype="float32")
+             for name, value in (("B2", 500), ("B3", 800), ("B4", 600), ("B8", 3000), ("B11", 1500))}
+    folder = tmp_path / "Sentinel-2_73.0250_31.0800_2023-01-01_2023-12-31"
+    folder.mkdir()
+    return write_tif(folder / f"{folder.name}.tif", bands)
+
+
+def test_describe_reads_the_file_and_its_download_name(sentinel_tif):
+    info = MapService().describe(str(sentinel_tif))
+
+    assert (info.width, info.height, info.band_count) == (50, 40, 5)
+    assert info.band_names == ("B2", "B3", "B4", "B8", "B11")
+    assert info.crs == "EPSG:4326" and info.nodata == NODATA and info.dtype == "float32"
+    assert info.bounds == pytest.approx((73.0, 31.06, 73.05, 31.1))
+    assert (info.satellite, info.start_date, info.end_date) == ("Sentinel-2", "2023-01-01", "2023-12-31")
+    assert info.size_bytes == sentinel_tif.stat().st_size
+
+
+def test_describe_gives_bounds_in_degrees_for_other_projections(tmp_path):
+    path = write_tif(tmp_path / "utm.tif", {"B1": np.zeros((10, 10))}, crs="EPSG:32643",
+                     origin=(300000, 3500000), pixel=10)
+    west, south, east, north = MapService().describe(str(path)).bounds
+    assert 72 < west < east < 74 and 31 < south < north < 32
+
+
+def test_unnamed_bands_get_numbered_names(tmp_path):
+    path = tmp_path / "plain.tif"
+    with rasterio.open(path, "w", driver="GTiff", width=4, height=4, count=2, dtype="uint8") as dst:
+        dst.write(np.zeros((2, 4, 4), dtype="uint8"))
+    assert MapService().describe(str(path)).band_names == ("Band 1", "Band 2")
+
+
+def test_missing_or_broken_file_is_a_clear_error(tmp_path):
+    with pytest.raises(MapError, match="missing or not a GeoTIFF"):
+        MapService().describe(str(tmp_path / "nowhere.tif"))
+    broken = tmp_path / "broken.tif"
+    broken.write_text("not a raster")
+    with pytest.raises(MapError):
+        MapService().describe(str(broken))
+
+
+# ------------------------------------------------------------------ band roles
+from backend.business.map.band_roles import band_roles  # noqa: E402
+
+S2 = ("B2", "B3", "B4", "B8", "B11")
+
+
+@pytest.mark.parametrize("satellite, bands, expected", [
+    ("Sentinel-2", S2, {"blue": "B2", "green": "B3", "red": "B4", "nir": "B8", "swir1": "B11"}),
+    ("Landsat-8", ("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6"),
+     {"blue": "SR_B2", "green": "SR_B3", "red": "SR_B4", "nir": "SR_B5", "swir1": "SR_B6"}),
+    ("Landsat-5", ("SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5"),
+     {"blue": "SR_B1", "green": "SR_B2", "red": "SR_B3", "nir": "SR_B4", "swir1": "SR_B5"}),
+    ("Sentinel-2", ("B4", "B8"), {"red": "B4", "nir": "B8"}),          # only the bands that were downloaded
+    ("", S2, {"blue": "B2", "green": "B3", "red": "B4", "nir": "B8", "swir1": "B11"}),  # recognised by name
+    ("", ("SR_B2", "SR_B3", "SR_B4"), {}),                              # Landsat 5 or 8? unknown
+    ("Dynamic-World", ("label",), {}),
+])
+def test_band_roles(satellite, bands, expected):
+    assert band_roles(satellite, bands) == expected
+
+
+# ------------------------------------------------------------------ colour maps
+from backend.business.map.colour_maps import DYNAMIC_WORLD_CLASSES, GREYS, VIRIDIS  # noqa: E402
+
+
+def test_colour_map_blends_between_its_stops():
+    table = GREYS.table()
+    assert table.shape == (256, 3) and table.dtype == np.uint8
+    assert table[0].tolist() == [0, 0, 0] and table[-1].tolist() == [255, 255, 255]
+    assert GREYS.colours(3) == ("#000000", "#808080", "#FFFFFF")
+    assert VIRIDIS.colours(2) == ("#440154", "#FDE725")
+
+
+def test_colour_map_looks_up_values_and_clips_them():
+    rgb = GREYS.apply(np.array([[-1.0, 0.0, 0.5, 1.0, 9.0, np.nan]]))
+    assert rgb.shape == (1, 6, 3)
+    assert rgb[0, :, 0].tolist() == [0, 0, 128, 255, 255, 0]
+
+
+def test_dynamic_world_has_its_nine_classes():
+    assert len(DYNAMIC_WORLD_CLASSES) == 9
+    assert DYNAMIC_WORLD_CLASSES[0] == ("Water", "#419BDF") and DYNAMIC_WORLD_CLASSES[6][0] == "Built area"
+
+
+# ------------------------------------------------------------------ view presets
+from backend.dto.map_dto import RasterInfoDTO  # noqa: E402
+
+
+def _info(satellite, bands):
+    return RasterInfoDTO(path="x.tif", name="x", width=10, height=10, band_names=bands, crs="EPSG:4326",
+                         bounds=(0, 0, 1, 1), nodata=NODATA, dtype="float32", size_bytes=1, satellite=satellite)
+
+
+def test_sentinel_2_offers_colour_composites_indices_and_each_band():
+    presets = MapService().view_presets(_info("Sentinel-2", S2))
+    assert [p.key for p in presets] == ["true_colour", "false_colour", "ndvi", "ndwi",
+                                        "band:B2", "band:B3", "band:B4", "band:B8", "band:B11"]
+    by_key = {p.key: p for p in presets}
+    assert by_key["true_colour"].bands == ("B4", "B3", "B2") and by_key["true_colour"].kind == "rgb"
+    assert by_key["false_colour"].bands == ("B8", "B4", "B3")
+    assert by_key["ndvi"].bands == ("B8", "B4") and by_key["ndwi"].bands == ("B3", "B8")
+
+
+def test_dynamic_world_shows_its_classes_first():
+    presets = MapService().view_presets(_info("Dynamic-World", ("label",)))
+    assert [p.key for p in presets] == ["classes", "band:label"]
+    assert presets[0].kind == "classes"
+
+
+def test_a_single_band_without_known_colours_is_shown_on_its_own():
+    presets = MapService().view_presets(_info("Landsat-8", ("ST_B10",)))
+    assert [(p.key, p.kind) for p in presets] == [("band:ST_B10", "band")]
+
+
+def test_only_bands_that_were_downloaded_are_used():
+    keys = [p.key for p in MapService().view_presets(_info("Sentinel-2", ("B4", "B8")))]
+    assert keys == ["ndvi", "band:B4", "band:B8"]  # no blue/green: no true colour, no NDWI
+
+
+# ------------------------------------------------------------------ rendering
+def _preset(service, info, key):
+    return next(p for p in service.view_presets(info) if p.key == key)
+
+
+@pytest.fixture
+def scene(tmp_path):
+    """Sentinel-2 bands over a 60 x 80 grid: the left half vegetation, the right half water; one no-data corner."""
+    shape = (60, 80)
+    veg = np.zeros(shape, dtype=bool)
+    veg[:, :40] = True
+    bands = {
+        "B2": np.where(veg, 400, 900), "B3": np.where(veg, 700, 1200), "B4": np.where(veg, 500, 600),
+        "B8": np.where(veg, 3500, 300), "B11": np.full(shape, 1000),
+    }
+    for data in bands.values():
+        data[:5, :5] = NODATA
+    folder = tmp_path / "Sentinel-2_73.0400_31.0700_2023-01-01_2023-12-31"
+    folder.mkdir()
+    return write_tif(folder / f"{folder.name}.tif", {k: v.astype("float32") for k, v in bands.items()})
+
+
+def test_true_colour_preview_is_rgba_with_transparent_no_data(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    view = service.render(info, _preset(service, info, "true_colour"))
+
+    assert view.rgba.shape == (60, 80, 4) and view.rgba.dtype == np.uint8
+    assert (view.width, view.height, view.scale) == (80, 60, 1.0) and view.notes == []
+    assert view.rgba[0, 0, 3] == 0 and view.rgba[30, 30, 3] == 255      # no-data is see-through
+    assert view.legend.kind == "rgb" and view.legend.labels == ("B4", "B3", "B2")
+
+
+def test_ndvi_is_high_on_vegetation_and_low_on_water(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    view = service.render(info, _preset(service, info, "ndvi"))
+
+    green_vegetation, water = view.rgba[30, 10, :3].astype(int), view.rgba[30, 70, :3].astype(int)
+    assert green_vegetation[1] > green_vegetation[0]                   # the green end of the scale
+    assert water[0] > water[1]                                          # the red/brown end
+    assert view.legend.kind == "scale" and (view.legend.low, view.legend.high) == (-0.2, 0.8)  # fixed range
+    assert len(view.legend.colours) == 5
+
+
+def test_large_files_are_drawn_scaled_down(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    view = service.render(info, _preset(service, info, "band:B8"), max_size=20)
+    assert (view.width, view.height) == (20, 15) and view.scale == pytest.approx(4.0)
+    assert view.notes == ["Shown at 1/4.0 of full resolution."]
+
+
+def test_dynamic_world_classes_use_their_colours_and_list_only_present_ones(tmp_path):
+    labels = np.zeros((10, 10), dtype="float32")   # water
+    labels[:, 5:] = 6                              # built area
+    labels[0, 0] = NODATA
+    folder = tmp_path / "Dynamic-World_73.0000_31.0000_2023-01-01_2023-12-31"
+    folder.mkdir()
+    path = write_tif(folder / f"{folder.name}.tif", {"label": labels})
+    service = MapService()
+    info = service.describe(str(path))
+    view = service.render(info, _preset(service, info, "classes"))
+
+    assert view.rgba[5, 2, :3].tolist() == [0x41, 0x9B, 0xDF] and view.rgba[5, 8, :3].tolist() == [0xC4, 0x28, 0x1B]
+    assert view.rgba[0, 0, 3] == 0
+    assert view.legend.labels == ("Water", "Built area") and view.legend.colours == ("#419BDF", "#C4281B")
+
+
+def test_a_preset_needing_a_missing_band_is_refused(scene):
+    from backend.dto.map_dto import ViewPresetDTO
+
+    service = MapService()
+    info = service.describe(str(scene))
+    with pytest.raises(MapError, match="no band B12"):
+        service.render(info, ViewPresetDTO("band:B12", "Band B12", "band", ("B12",)))
+
+
+def test_a_file_of_only_no_data_says_so(tmp_path):
+    path = write_tif(tmp_path / "empty.tif", {"B1": np.full((8, 8), NODATA, dtype="float32")})
+    service = MapService()
+    info = service.describe(str(path))
+    view = service.render(info, service.view_presets(info)[0])
+    assert (view.rgba[..., 3] == 0).all() and "nothing to show" in view.notes[-1]
+
+
+# ------------------------------------------------------------------ values at a point
+def test_values_at_a_point_come_from_the_full_resolution_file(scene):
+    service = MapService()
+    info = service.describe(str(scene))          # west 73.0, north 31.1, 0.001 degree pixels
+    west, south, east, north = info.bounds
+
+    vegetation = service.values_at(info, west + 0.0105, north - 0.0305)   # column 10, row 30
+    water = service.values_at(info, west + 0.0705, north - 0.0305)        # column 70
+    assert vegetation == {"B2": 400.0, "B3": 700.0, "B4": 500.0, "B8": 3500.0, "B11": 1000.0}
+    assert water["B8"] == 300.0
+
+
+def test_no_data_and_outside_the_image_have_no_values(scene):
+    service = MapService()
+    info = service.describe(str(scene))
+    west, south, east, north = info.bounds
+    assert set(service.values_at(info, west + 0.0015, north - 0.0015).values()) == {None}  # the no-data corner
+    assert set(service.values_at(info, west - 1, north + 1).values()) == {None}            # off the image
+
+
+# ------------------------------------------------------------------ through the business facade
+def test_the_facade_passes_viewing_calls_to_the_map_service(scene):
+    from unittest.mock import MagicMock
+
+    from backend.business.facade import BusinessFacade
+
+    facade = BusinessFacade(MagicMock(), MagicMock(), MagicMock(), map_service=MapService())
+    info = facade.describe_raster(str(scene))
+    presets = facade.raster_view_presets(info)
+    view = facade.render_raster(info, presets[0], max_size=40)
+    west, south, east, north = info.bounds
+
+    assert presets[0].key == "true_colour" and view.width == 40
+    assert facade.raster_values_at(info, west + 0.0105, north - 0.0305)["B8"] == 3500.0

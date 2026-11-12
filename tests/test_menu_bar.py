@@ -33,7 +33,7 @@ def test_has_the_classic_menus_in_order(bar):
 
 
 def test_menus_hold_the_expected_items(bar):
-    assert _items(bar.file_menu) == ["&New request", "Sign &out", "E&xit"]
+    assert _items(bar.file_menu) == ["&New request", "&Open GeoTIFF…", "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "&Side bar",
                                      "&Terminal", "&Full screen", "&Theme"]
@@ -47,6 +47,7 @@ def test_shortcuts_are_the_familiar_ones(bar):
     shortcuts = {action.text(): action.shortcut().toString() for menu in
                  (bar.file_menu, bar.edit_menu, bar.view_menu) for action in menu.actions()}
     assert shortcuts["&New request"] == "Ctrl+N" and shortcuts["E&xit"] == "Ctrl+Q"
+    assert shortcuts["&Open GeoTIFF…"] == "Ctrl+O"
     assert shortcuts["&Undo"] == "Ctrl+Z" and shortcuts["&Redo"] == "Ctrl+Y"
     assert shortcuts["Cu&t"] == "Ctrl+X" and shortcuts["&Copy"] == "Ctrl+C" and shortcuts["&Paste"] == "Ctrl+V"
     assert shortcuts["&Dashboard"] == "Ctrl+1" and shortcuts["&Full screen"] == "F11"

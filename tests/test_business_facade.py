@@ -16,7 +16,8 @@ def services():
 @pytest.fixture
 def facade(services):
     user, request, download = services
-    return BusinessFacade(user_service=user, request_service=request, download_service=download)
+    return BusinessFacade(user_service=user, request_service=request, download_service=download,
+                          map_service=MagicMock())
 
 
 def test_checking_a_form_does_not_keep_it(facade, services):

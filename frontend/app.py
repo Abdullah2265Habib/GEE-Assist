@@ -20,6 +20,7 @@ from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO
 from frontend.assets import APP_ICON
 from frontend.form_theme import apply_palette
+from frontend.qt_messages import install_message_filter
 from frontend.restart import start_again
 from frontend.theme import apply_theme
 from frontend.views.auth import AuthView
@@ -88,6 +89,7 @@ class AppController(QObject):
 def run() -> int:
     _use_own_taskbar_icon()
     _quiet_ffmpeg()
+    install_message_filter()  # e.g. the video player's harmless shutdown warnings
     app = QApplication(sys.argv)
     app.setApplicationName("GEE-Assist")
     app.setWindowIcon(QIcon(str(APP_ICON)))

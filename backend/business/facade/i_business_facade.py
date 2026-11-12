@@ -3,7 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
-from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, ValidationDTO
+from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
+from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SessionInfoDTO,
@@ -87,6 +88,10 @@ class IBusinessFacade(ABC):
     def import_aoi(self, file_path: str) -> str: ...
 
     @abstractmethod
+    def search_place(self, name: str) -> list[PlaceDTO]:
+        """Find a city, region or country by name; each match's ``aoi`` is its exact boundary."""
+
+    @abstractmethod
     def get_kept_requests(self) -> list[FormDTO]: ...
 
     # ------------------------------------------------------------- download (UC-05)
@@ -138,3 +143,16 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def shutdown_downloads(self) -> None:
         """Called when the app closes: the active download is paused and resumes next time."""
+
+    # ------------------------------------------------------------- viewing GeoTIFFs
+    @abstractmethod
+    def describe_raster(self, path: str) -> RasterInfoDTO: ...
+
+    @abstractmethod
+    def raster_view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]: ...
+
+    @abstractmethod
+    def render_raster(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO: ...
+
+    @abstractmethod
+    def raster_values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]: ...

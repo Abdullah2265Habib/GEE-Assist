@@ -1,8 +1,9 @@
 """Window shown after signing in.
 
 A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
-left (logo, navigation and the signed-in user) next to four pages: the dashboard (start page), the query-input workspace, downloads and the
-account card. Clicking the logo slides the side bar open or closed; clicking the user
+left (logo, navigation and the signed-in user) next to the pages: the dashboard (start
+page), the query-input workspace, downloads, the account card and the GeoTIFF viewer
+(opened from a finished download). Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
@@ -16,6 +17,7 @@ from PyQt6.QtCore import QPoint, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
 from PyQt6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -29,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
+from backend.config import DEFAULT_DOWNLOAD_DIR
 from backend.dto.user_dto import UserDTO
 from frontend import appearance, theme
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
@@ -37,6 +40,7 @@ from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
+from frontend.views.raster_viewer_view import RasterViewerView
 from frontend.gkonsol.form_port import WidgetForm
 from frontend.gkonsol.help import REFERENCE_FILE
 from frontend.gkonsol.history import GkonsolStore, History
@@ -198,6 +202,7 @@ class HomeWindow(QMainWindow):
         self.query_input = MainWindow(facade)
         self.query_input.setWindowFlags(Qt.WindowType.Widget)
         self.downloads = DownloadView(facade)
+        self.viewer = RasterViewerView(facade)
 
         self.account = AccountView(facade)
         account_page = QFrame(objectName="HomeContent")
@@ -218,6 +223,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.query_input)
         self.pages.addWidget(self.downloads)
         self.pages.addWidget(account_page)
+        self.pages.addWidget(self.viewer)
         self._account_page = account_page
 
         # ---- terminal (gkonsol) under the pages
@@ -255,6 +261,8 @@ class HomeWindow(QMainWindow):
         if app is not None:  # a command still running when the app quits is stopped first
             app.aboutToQuit.connect(self.terminal.shutdown)
         self.query_input.download_requested.connect(self.start_download)
+        self.downloads.view_requested.connect(self.show_viewer)
+        self.viewer.show_on_map_requested.connect(self.show_on_map)
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
@@ -278,6 +286,27 @@ class HomeWindow(QMainWindow):
 
     def show_account(self) -> None:
         self._show_page(self._account_page)
+
+    def open_geotiff(self) -> None:
+        """Choose any GeoTIFF on the computer (starting in the downloads folder) and show it."""
+        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR),
+                                              "GeoTIFF (*.tif *.tiff);;All files (*)")
+        if path:
+            self.show_viewer(path)
+
+    def show_on_map(self, png: bytes, bounds: tuple, title: str) -> None:
+        """Lay a viewer picture over the Query Input map and go there."""
+        form_view = getattr(self.query_input, "form_view", None)
+        map_widget = getattr(form_view, "map_widget", None)
+        if map_widget is None:
+            return
+        map_widget.show_image(png, bounds, title)
+        self.show_query_input()
+
+    def show_viewer(self, path: str) -> None:
+        """Show the GeoTIFF at ``path`` on the Viewer page."""
+        self.viewer.open(path)
+        self._show_page(self.viewer)
 
     def sign_out(self) -> None:
         self.signed_out.emit("You have been signed out.")
@@ -373,6 +402,7 @@ class HomeWindow(QMainWindow):
     def _connect_menu_bar(self) -> None:
         bar = self.menu_bar
         bar.new_request.triggered.connect(self.show_query_input)
+        bar.open_geotiff.triggered.connect(self.open_geotiff)
         bar.sign_out.triggered.connect(self.sign_out)
         bar.exit.triggered.connect(self.exit_app)
         bar.view_dashboard.triggered.connect(self.show_dashboard)

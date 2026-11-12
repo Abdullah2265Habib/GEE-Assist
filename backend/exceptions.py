@@ -35,3 +35,9 @@ class GEERequestTooHeavyError(GEEError):
     smallest request fails, downloads stop at once so the user can make the request
     lighter (shorter date range, mosaic composite).
     """
+
+
+class PlaceSearchError(GeeAssistError):
+    """A city / region / country could not be looked up, or has no boundary to use as an AOI."""
+class MapError(GeeAssistError):
+    """A GeoTIFF cannot be shown: it is missing, unreadable, or has no bands for the chosen view."""

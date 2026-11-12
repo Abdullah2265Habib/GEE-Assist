@@ -266,3 +266,24 @@ def test_display_formats():
     assert format_when("2026-11-06T10:15:00", today) == "Today 10:15 AM"
     assert format_when("2026-11-05T15:30:00", today) == "Yesterday 3:30 PM"
     assert format_when("2026-06-05T02:23:00", today) == "Jun 5, 2026 2:23 AM"
+
+
+# ------------------------------------------------------------------ viewing a finished download
+def test_completed_download_can_be_viewed_when_its_file_is_there(view, facade, tmp_path):
+    tif = tmp_path / "Sentinel-2_73.0_31.4.tif"
+    tif.write_bytes(b"GeoTIFF")
+    facade.list_downloads.return_value = [
+        _job("1", "completed", dataset=DatasetDTO("1", "S2", str(tif), size_bytes=7)),
+        _job("2", "completed", dataset=DatasetDTO("2", "S2", str(tmp_path / "moved.tif"), size_bytes=7)),
+    ]
+    view.refresh()
+    rows = {row.job.id: row for row in _rows(view.completed)}
+    present, moved = rows["1"], rows["2"]
+
+    assert present.view_button.isEnabled() and present.view_button.toolTip() == "Show the downloaded GeoTIFF"
+    assert not moved.view_button.isEnabled() and "no longer there" in moved.view_button.toolTip()
+
+    asked = []
+    view.view_requested.connect(asked.append)
+    present.view_button.click()
+    assert asked == [str(tif)]
