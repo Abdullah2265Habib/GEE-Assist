@@ -476,3 +476,16 @@ def test_command_reference_falls_back_to_help_in_the_terminal(home, monkeypatch)
     assert home.terminal_area.is_terminal_visible()
     assert "gkonsol — the GEE-Assist command line" in home.terminal.view.toPlainText()
     home.hide()
+
+
+# ------------------------------------------------------------------ viewer
+def test_view_on_a_completed_download_opens_the_viewer(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home.viewer, "open", opened.append)
+
+    home.downloads.view_requested.emit("D:/downloads/x/x.tif")
+
+    assert opened == ["D:/downloads/x/x.tif"]
+    assert home.current_page() is home.viewer and not home.back_button.isHidden()
+    home.back_button.click()
+    assert home.current_page() is home.dashboard
