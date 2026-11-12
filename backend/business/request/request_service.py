@@ -6,17 +6,27 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
-from backend.business.request.geojson_utils import read_aoi_geometry, utm_epsg_for, validate_geometry
+from backend.business.request.geojson_utils import (
+    POLYGON_TYPES,
+    read_aoi_geometry,
+    simplify_geometry,
+    utm_epsg_for,
+    validate_geometry,
+)
 from backend.business.request.i_request_service import IRequestService
 from backend.business.request.query_entities import IEntityExtractor, QueryEntityExtractor, format_entity_hints
 from backend.business.request.query_interpretation import check_interpretation, ground_with_entities, has_form_values
 from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.data.i_data_facade import IDataFacade
-from backend.dto import FormDTO, ValidationDTO
-from backend.exceptions import LLMServiceError, ValidationError
+from backend.dto import FormDTO, PlaceDTO, ValidationDTO
+from backend.exceptions import LLMServiceError, PlaceSearchError, ValidationError
 
 _EPSG_CODE = re.compile(r"^EPSG:\d{4,5}$")
+MAX_PLACE_NAME_LENGTH = 200
+# A place's outline is sent with every GEE request of a download, so very detailed
+# boundaries (whole countries) are simplified to this many vertices.
+MAX_PLACE_VERTICES = 5000
 
 
 class RequestService(IRequestService):
@@ -178,6 +188,48 @@ class RequestService(IRequestService):
     def import_aoi(self, file_path: str) -> str:
         """Raises AOIImportError for unsupported (6b) or invalid (6a) files."""
         return json.dumps(read_aoi_geometry(file_path))
+
+    # ------------------------------------------------------------------
+    # AOI from a place name (city, region, country)
+    # ------------------------------------------------------------------
+    def search_place(self, name: str) -> list[PlaceDTO]:
+        """Places matching ``name``, best first; each ``aoi`` is the place's boundary.
+
+        Places without a boundary (e.g. only a point is mapped) are left out, so
+        whatever is chosen is the exact mapped area, not an approximation.
+
+        Raises:
+            ValidationError: the name is empty or too long.
+            PlaceSearchError: the search failed, or no match has a boundary.
+        """
+        query = " ".join((name or "").split())
+        if not query:
+            raise ValidationError("Type the name of a city, region or country to search for.")
+        if len(query) > MAX_PLACE_NAME_LENGTH:
+            raise ValidationError(f"The place name is too long ({len(query)} characters, limit {MAX_PLACE_NAME_LENGTH}).")
+        if self._data_facade is None:
+            raise PlaceSearchError("Place search is not set up in this build. Draw the area on the map instead.")
+
+        places: list[PlaceDTO] = []
+        seen: set[str] = set()
+        for place in self._data_facade.search_places(query):
+            try:
+                geometry = json.loads(place.aoi)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(geometry, dict) or geometry.get("type") not in POLYGON_TYPES:
+                continue  # no boundary mapped for this place
+            if place.display_name in seen or validate_geometry(geometry):
+                continue
+            seen.add(place.display_name)
+            places.append(replace(place, aoi=json.dumps(simplify_geometry(geometry, MAX_PLACE_VERTICES))))
+
+        if not places:
+            raise PlaceSearchError(
+                f"No boundary found for \"{query}\". Try a city, region or country name "
+                "(adding the country helps, e.g. \"Lahore, Pakistan\"), or draw the area instead."
+            )
+        return places
 
     # ------------------------------------------------------------------
     # Keeping the data
