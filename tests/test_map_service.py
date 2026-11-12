@@ -66,3 +66,24 @@ def test_missing_or_broken_file_is_a_clear_error(tmp_path):
     broken.write_text("not a raster")
     with pytest.raises(MapError):
         MapService().describe(str(broken))
+
+
+# ------------------------------------------------------------------ band roles
+from backend.business.map.band_roles import band_roles  # noqa: E402
+
+S2 = ("B2", "B3", "B4", "B8", "B11")
+
+
+@pytest.mark.parametrize("satellite, bands, expected", [
+    ("Sentinel-2", S2, {"blue": "B2", "green": "B3", "red": "B4", "nir": "B8", "swir1": "B11"}),
+    ("Landsat-8", ("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6"),
+     {"blue": "SR_B2", "green": "SR_B3", "red": "SR_B4", "nir": "SR_B5", "swir1": "SR_B6"}),
+    ("Landsat-5", ("SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5"),
+     {"blue": "SR_B1", "green": "SR_B2", "red": "SR_B3", "nir": "SR_B4", "swir1": "SR_B5"}),
+    ("Sentinel-2", ("B4", "B8"), {"red": "B4", "nir": "B8"}),          # only the bands that were downloaded
+    ("", S2, {"blue": "B2", "green": "B3", "red": "B4", "nir": "B8", "swir1": "B11"}),  # recognised by name
+    ("", ("SR_B2", "SR_B3", "SR_B4"), {}),                              # Landsat 5 or 8? unknown
+    ("Dynamic-World", ("label",), {}),
+])
+def test_band_roles(satellite, bands, expected):
+    assert band_roles(satellite, bands) == expected
