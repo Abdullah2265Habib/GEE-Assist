@@ -20,7 +20,7 @@ from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.data.i_data_facade import IDataFacade
 from backend.dto import FormDTO, PlaceDTO, ValidationDTO
-from backend.exceptions import LLMServiceError, PlaceSearchError, ValidationError
+from backend.exceptions import GeeAssistError, LLMServiceError, PlaceSearchError, ValidationError
 
 _EPSG_CODE = re.compile(r"^EPSG:\d{4,5}$")
 MAX_PLACE_NAME_LENGTH = 200
@@ -49,7 +49,9 @@ class RequestService(IRequestService):
         1. a local named-entity classifier finds places, dates, datasets, processes, ...
         2. Gemini interprets the query, with those entities as hints
         3. what the user explicitly wrote overrides Gemini's guesses
-        4. everything is checked against the dataset catalogue
+        4. the place is looked up by name, so the area is its exact boundary rather
+           than Gemini's rough rectangle (which is kept when no boundary is found)
+        5. everything is checked against the dataset catalogue
 
         If Gemini is unavailable, the form is filled from the entities alone.
         Nothing is kept here: the user checks the filled form and submits it.
@@ -70,14 +72,31 @@ class RequestService(IRequestService):
                 raise LLMServiceError("Gemini isn't connected.")
             interpreted = self._data_facade.process_query(query + format_entity_hints(entities))
         except LLMServiceError as exc:
-            fallback = ground_with_entities(FormDTO(source="nl", query_text=query), entities)
+            fallback = self._with_place_boundary(ground_with_entities(FormDTO(source="nl", query_text=query), entities))
             if not has_form_values(fallback):
                 raise
             note = f"{exc} The form was filled from what was recognised in your text."
             return check_interpretation(replace(fallback, notes=[note, *fallback.notes]))
 
         grounded = ground_with_entities(replace(interpreted, source="nl", query_text=query), entities)
-        return check_interpretation(grounded)
+        return check_interpretation(self._with_place_boundary(grounded))
+
+    def _with_place_boundary(self, form: FormDTO) -> FormDTO:
+        """Replace the query's area with the exact boundary of the place it names."""
+        if not form.aoi_name:
+            return form
+        try:
+            place = self.search_place(form.aoi_name)[0]
+        except GeeAssistError:
+            place = None
+        if place is not None:
+            note = f"Area: the boundary of {place.display_name}."
+            return replace(form, aoi=place.aoi, notes=[*form.notes, note])
+        if form.aoi:
+            note = f"Couldn't find the boundary of {form.aoi_name}; the area is an approximate rectangle. Adjust it on the map."
+        else:
+            note = f"Couldn't locate {form.aoi_name} automatically; draw the area on the map."
+        return replace(form, notes=[*form.notes, note])
 
     # ------------------------------------------------------------------
     # UC-03 Fill Parameter Form               (branch: query-input-form)
