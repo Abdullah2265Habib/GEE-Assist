@@ -44,7 +44,7 @@ Run the tests with `python -m pytest`.
   form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
   returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
 - A menu bar runs along the top of every page, as in Word or Excel:
-  - **File**: New request (Ctrl+N), Sign out, Exit (Ctrl+Q)
+  - **File**: New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out, Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
     Terminal (Ctrl+`), Full screen (F11), Theme
@@ -120,6 +120,26 @@ How it works:
 - Pause keeps finished parts; Start continues where it stopped, even after closing the app.
   Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
 
+## Viewing a downloaded GeoTIFF
+
+Press **View** on a finished download (or **File → Open GeoTIFF…** for any `.tif`) to open the
+viewer:
+
+- **Views**, depending on the file's bands: true colour, false colour (vegetation shows red), NDVI
+  (vegetation), NDWI (water), Dynamic World land-cover classes in their official colours, and each
+  band on its own on a colour scale. Composites and single bands are stretched between their 2nd and
+  98th percentiles; NDVI (-0.2 to 0.8) and NDWI (-0.5 to 0.5) use fixed ranges, so a colour means
+  the same in every file. No-data pixels are transparent.
+- **Legend** for the view: a colour bar with its range, the classes present, or which band is shown
+  as red, green and blue.
+- **Under the pointer**: latitude/longitude, every band's value (read from the full-resolution file)
+  and the index or land-cover class there.
+- **Details**: size, bands, coordinate system, area, file size and path.
+- Mouse wheel zooms, dragging pans, double-click fits the picture again. Large files are drawn at
+  most 1600 px across (the banner says by how much).
+- **Show on map** lays the current view over the Query Input map, with an opacity slider and a
+  "Remove from map" button on the map.
+
 ### Where the code is
 
 | Layer | Files |
@@ -141,5 +161,6 @@ How it works:
 | Download (chunking, merging, queue) | `backend/business/download/` |
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
 | Downloads page | `frontend/views/download_view.py`, `frontend/widgets/download_rows.py`, `speed_chart.py` |
+| GeoTIFF viewer (views, colours, legend, values) | `backend/business/map/`, `frontend/views/raster_viewer_view.py`, `frontend/widgets/raster_canvas.py`, `raster_legend.py` |
 | gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
 | Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |
