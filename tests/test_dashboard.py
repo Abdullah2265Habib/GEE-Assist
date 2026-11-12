@@ -489,3 +489,23 @@ def test_view_on_a_completed_download_opens_the_viewer(home, monkeypatch):
     assert home.current_page() is home.viewer and not home.back_button.isHidden()
     home.back_button.click()
     assert home.current_page() is home.dashboard
+
+
+@pytest.mark.parametrize("chosen", ["C:/data/scene.tif", ""])
+def test_file_menu_opens_any_geotiff(home, monkeypatch, chosen):
+    from PyQt6.QtWidgets import QFileDialog
+
+    from backend.config import DEFAULT_DOWNLOAD_DIR
+
+    asked, opened = [], []
+    monkeypatch.setattr(QFileDialog, "getOpenFileName",
+                        lambda parent, title, folder, filters: asked.append((title, folder)) or (chosen, ""))
+    monkeypatch.setattr(home.viewer, "open", opened.append)
+
+    home.menu_bar.open_geotiff.trigger()
+
+    assert asked == [("Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR))]   # starts in the downloads folder
+    if chosen:
+        assert opened == [chosen] and home.current_page() is home.viewer
+    else:                                                          # cancelled: stay where we were
+        assert opened == [] and home.current_page() is home.dashboard

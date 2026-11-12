@@ -17,6 +17,7 @@ from PyQt6.QtCore import QPoint, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
 from PyQt6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -30,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
+from backend.config import DEFAULT_DOWNLOAD_DIR
 from backend.dto.user_dto import UserDTO
 from frontend import appearance, theme
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
@@ -284,6 +286,13 @@ class HomeWindow(QMainWindow):
     def show_account(self) -> None:
         self._show_page(self._account_page)
 
+    def open_geotiff(self) -> None:
+        """Choose any GeoTIFF on the computer (starting in the downloads folder) and show it."""
+        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR),
+                                              "GeoTIFF (*.tif *.tiff);;All files (*)")
+        if path:
+            self.show_viewer(path)
+
     def show_viewer(self, path: str) -> None:
         """Show the GeoTIFF at ``path`` on the Viewer page."""
         self.viewer.open(path)
@@ -383,6 +392,7 @@ class HomeWindow(QMainWindow):
     def _connect_menu_bar(self) -> None:
         bar = self.menu_bar
         bar.new_request.triggered.connect(self.show_query_input)
+        bar.open_geotiff.triggered.connect(self.open_geotiff)
         bar.sign_out.triggered.connect(self.sign_out)
         bar.exit.triggered.connect(self.exit_app)
         bar.view_dashboard.triggered.connect(self.show_dashboard)
