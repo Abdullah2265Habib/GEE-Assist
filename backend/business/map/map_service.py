@@ -6,7 +6,8 @@ from pathlib import Path
 
 from backend.business.download.naming import parse_dataset_name
 from backend.business.map.i_map_service import IMapService
-from backend.dto.map_dto import RasterInfoDTO
+from backend.business.map.view_presets import presets_for
+from backend.dto.map_dto import RasterInfoDTO, ViewPresetDTO
 from backend.exceptions import MapError
 
 
@@ -31,3 +32,6 @@ class MapService(IMapService):
                 )
         except rasterio.errors.RasterioIOError as exc:
             raise MapError(f"Cannot open {file.name}: it is missing or not a GeoTIFF.") from exc
+
+    def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
+        return presets_for(info)

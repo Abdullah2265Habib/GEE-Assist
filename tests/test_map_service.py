@@ -110,3 +110,38 @@ def test_colour_map_looks_up_values_and_clips_them():
 def test_dynamic_world_has_its_nine_classes():
     assert len(DYNAMIC_WORLD_CLASSES) == 9
     assert DYNAMIC_WORLD_CLASSES[0] == ("Water", "#419BDF") and DYNAMIC_WORLD_CLASSES[6][0] == "Built area"
+
+
+# ------------------------------------------------------------------ view presets
+from backend.dto.map_dto import RasterInfoDTO  # noqa: E402
+
+
+def _info(satellite, bands):
+    return RasterInfoDTO(path="x.tif", name="x", width=10, height=10, band_names=bands, crs="EPSG:4326",
+                         bounds=(0, 0, 1, 1), nodata=NODATA, dtype="float32", size_bytes=1, satellite=satellite)
+
+
+def test_sentinel_2_offers_colour_composites_indices_and_each_band():
+    presets = MapService().view_presets(_info("Sentinel-2", S2))
+    assert [p.key for p in presets] == ["true_colour", "false_colour", "ndvi", "ndwi",
+                                        "band:B2", "band:B3", "band:B4", "band:B8", "band:B11"]
+    by_key = {p.key: p for p in presets}
+    assert by_key["true_colour"].bands == ("B4", "B3", "B2") and by_key["true_colour"].kind == "rgb"
+    assert by_key["false_colour"].bands == ("B8", "B4", "B3")
+    assert by_key["ndvi"].bands == ("B8", "B4") and by_key["ndwi"].bands == ("B3", "B8")
+
+
+def test_dynamic_world_shows_its_classes_first():
+    presets = MapService().view_presets(_info("Dynamic-World", ("label",)))
+    assert [p.key for p in presets] == ["classes", "band:label"]
+    assert presets[0].kind == "classes"
+
+
+def test_a_single_band_without_known_colours_is_shown_on_its_own():
+    presets = MapService().view_presets(_info("Landsat-8", ("ST_B10",)))
+    assert [(p.key, p.kind) for p in presets] == [("band:ST_B10", "band")]
+
+
+def test_only_bands_that_were_downloaded_are_used():
+    keys = [p.key for p in MapService().view_presets(_info("Sentinel-2", ("B4", "B8")))]
+    assert keys == ["ndvi", "band:B4", "band:B8"]  # no blue/green: no true colour, no NDWI
