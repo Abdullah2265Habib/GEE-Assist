@@ -1,0 +1,68 @@
+"""MapService: reading downloaded GeoTIFFs so they can be shown."""
+
+import numpy as np
+import pytest
+
+rasterio = pytest.importorskip("rasterio")
+from rasterio.transform import from_origin  # noqa: E402
+
+from backend.business.map import MapService  # noqa: E402
+from backend.exceptions import MapError  # noqa: E402
+
+NODATA = -9999.0
+
+
+def write_tif(path, bands: dict, crs="EPSG:4326", origin=(73.0, 31.1), pixel=0.001):
+    """A small float32 GeoTIFF with one band per entry of ``bands`` (name -> 2-D array)."""
+    arrays = list(bands.values())
+    height, width = arrays[0].shape
+    with rasterio.open(path, "w", driver="GTiff", width=width, height=height, count=len(arrays), dtype="float32",
+                       crs=crs, transform=from_origin(origin[0], origin[1], pixel, pixel), nodata=NODATA) as dst:
+        for index, (name, data) in enumerate(bands.items(), start=1):
+            dst.write(data.astype("float32"), index)
+            dst.set_band_description(index, name)
+    return path
+
+
+@pytest.fixture
+def sentinel_tif(tmp_path):
+    shape = (40, 50)
+    bands = {name: np.full(shape, value, dtype="float32")
+             for name, value in (("B2", 500), ("B3", 800), ("B4", 600), ("B8", 3000), ("B11", 1500))}
+    folder = tmp_path / "Sentinel-2_73.0250_31.0800_2023-01-01_2023-12-31"
+    folder.mkdir()
+    return write_tif(folder / f"{folder.name}.tif", bands)
+
+
+def test_describe_reads_the_file_and_its_download_name(sentinel_tif):
+    info = MapService().describe(str(sentinel_tif))
+
+    assert (info.width, info.height, info.band_count) == (50, 40, 5)
+    assert info.band_names == ("B2", "B3", "B4", "B8", "B11")
+    assert info.crs == "EPSG:4326" and info.nodata == NODATA and info.dtype == "float32"
+    assert info.bounds == pytest.approx((73.0, 31.06, 73.05, 31.1))
+    assert (info.satellite, info.start_date, info.end_date) == ("Sentinel-2", "2023-01-01", "2023-12-31")
+    assert info.size_bytes == sentinel_tif.stat().st_size
+
+
+def test_describe_gives_bounds_in_degrees_for_other_projections(tmp_path):
+    path = write_tif(tmp_path / "utm.tif", {"B1": np.zeros((10, 10))}, crs="EPSG:32643",
+                     origin=(300000, 3500000), pixel=10)
+    west, south, east, north = MapService().describe(str(path)).bounds
+    assert 72 < west < east < 74 and 31 < south < north < 32
+
+
+def test_unnamed_bands_get_numbered_names(tmp_path):
+    path = tmp_path / "plain.tif"
+    with rasterio.open(path, "w", driver="GTiff", width=4, height=4, count=2, dtype="uint8") as dst:
+        dst.write(np.zeros((2, 4, 4), dtype="uint8"))
+    assert MapService().describe(str(path)).band_names == ("Band 1", "Band 2")
+
+
+def test_missing_or_broken_file_is_a_clear_error(tmp_path):
+    with pytest.raises(MapError, match="missing or not a GeoTIFF"):
+        MapService().describe(str(tmp_path / "nowhere.tif"))
+    broken = tmp_path / "broken.tif"
+    broken.write_text("not a raster")
+    with pytest.raises(MapError):
+        MapService().describe(str(broken))
