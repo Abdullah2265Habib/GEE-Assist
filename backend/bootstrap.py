@@ -13,6 +13,7 @@ from backend.config.settings import get_settings
 from backend.data.clients.auth_api_client import AuthApiClient
 from backend.data.clients.gee_client import GEEClient
 from backend.data.clients.gemini_client import GeminiClient
+from backend.data.clients.nominatim_client import NominatimClient
 from backend.data.data_facade import DataFacade
 from backend.data.session_store import KeyringSessionStore
 
@@ -29,6 +30,7 @@ def build_business_facade() -> IBusinessFacade:
     data_facade = DataFacade(
         gemini_client=GeminiClient(api_key=llm.api_key, model=llm.model),
         gee_client=GEEClient(project=settings.gee_project),
+        geocoding_client=NominatimClient(),
     )
     request_service = RequestService(data_facade=data_facade)
 

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.data.clients.i_gee_client import ProgressCallback, StopCheck
-from backend.dto import CheckDTO, ChunkDTO, FormDTO
+from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 
 
 class IDataFacade(ABC):
@@ -18,6 +18,15 @@ class IDataFacade(ABC):
     @abstractmethod
     def process_query(self, prompt: str) -> FormDTO:
         """Interpret a natural-language request (delegates to IGeminiClient)."""
+
+    @abstractmethod
+    def search_places(self, query: str) -> list[PlaceDTO]:
+        """Places (city, region, country) matching ``query``, with their boundaries
+        (delegates to IGeocodingClient).
+
+        Raises:
+            PlaceSearchError: place search is unavailable or failed.
+        """
 
     @abstractmethod
     def fetch_chunk(

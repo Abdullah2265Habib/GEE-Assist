@@ -7,7 +7,7 @@ from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
 from backend.business.user.i_user_service import IUserService
-from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, ValidationDTO
+from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
 from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
@@ -101,6 +101,9 @@ class BusinessFacade(IBusinessFacade):
 
     def import_aoi(self, file_path: str) -> str:
         return self._request_service.import_aoi(file_path)
+
+    def search_place(self, name: str) -> list[PlaceDTO]:
+        return self._request_service.search_place(name)
 
     def get_kept_requests(self) -> list[FormDTO]:
         return self._request_service.get_kept_requests()

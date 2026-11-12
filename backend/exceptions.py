@@ -37,5 +37,7 @@ class GEERequestTooHeavyError(GEEError):
     """
 
 
+class PlaceSearchError(GeeAssistError):
+    """A city / region / country could not be looked up, or has no boundary to use as an AOI."""
 class MapError(GeeAssistError):
     """A GeoTIFF cannot be shown: it is missing, unreadable, or has no bands for the chosen view."""

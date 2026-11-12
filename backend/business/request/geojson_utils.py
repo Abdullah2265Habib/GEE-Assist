@@ -134,3 +134,103 @@ def _ring_area(ring: list) -> float:
     return 0.5 * sum(
         ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1] for i in range(len(ring) - 1)
     )
+
+
+# ----------------------------------------------------------------------------- simplification
+def count_vertices(geometry: dict[str, Any]) -> int:
+    """Positions in all rings (the closing position of each ring is not counted)."""
+    coords = geometry["coordinates"]
+    polygons = [coords] if geometry["type"] == "Polygon" else coords
+    return sum(len(ring) - 1 for poly in polygons for ring in poly)
+
+
+def simplify_geometry(geometry: dict[str, Any], max_vertices: int) -> dict[str, Any]:
+    """Return ``geometry`` with at most ``max_vertices`` vertices (Douglas-Peucker).
+
+    The tolerance starts tiny and doubles until the outline fits, so the shape is
+    kept as exact as the budget allows. Holes and islands that shrink below the
+    tolerance are dropped; the largest polygon is always kept.
+    """
+    if count_vertices(geometry) <= max_vertices:
+        return geometry
+    polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
+    polygons = sorted(polygons, key=lambda poly: abs(_ring_area(poly[0])), reverse=True)
+    min_lon, min_lat, max_lon, max_lat = geometry_bbox(geometry)
+    tolerance = max(max_lon - min_lon, max_lat - min_lat) / 100_000
+
+    while True:
+        simplified = _simplify_polygons(polygons, tolerance)
+        result = (
+            {"type": "Polygon", "coordinates": simplified[0]}
+            if len(simplified) == 1
+            else {"type": "MultiPolygon", "coordinates": simplified}
+        )
+        if count_vertices(result) <= max_vertices:
+            return result
+        tolerance *= 2
+
+
+def _simplify_polygons(polygons: list, tolerance: float) -> list:
+    kept = []
+    for index, polygon in enumerate(polygons):
+        outer = _simplify_ring(polygon[0], tolerance)
+        if outer is None:
+            if index > 0:
+                continue  # an island smaller than the tolerance
+            outer = _bbox_ring(polygon[0])  # never lose the main area
+        holes = [hole for hole in (_simplify_ring(ring, tolerance) for ring in polygon[1:]) if hole]
+        kept.append([outer, *holes])
+    return kept
+
+
+def _simplify_ring(ring: list, tolerance: float) -> list | None:
+    """Douglas-Peucker on a closed ring; None when fewer than 3 distinct points remain."""
+    # Split the ring at the point farthest from its start, so neither half is degenerate.
+    start = ring[0]
+    far = max(range(len(ring)), key=lambda i: (ring[i][0] - start[0]) ** 2 + (ring[i][1] - start[1]) ** 2)
+    if far == 0:
+        return None
+    first = _douglas_peucker(ring[: far + 1], tolerance)
+    second = _douglas_peucker(ring[far:], tolerance)
+    simplified = first + second[1:]
+    if len(simplified) < 4:
+        return None
+    return simplified
+
+
+def _douglas_peucker(points: list, tolerance: float) -> list:
+    """Iterative Douglas-Peucker (country outlines can have too many points for recursion)."""
+    n = len(points)
+    if n < 3:
+        return list(points)
+    keep = [False] * n
+    keep[0] = keep[-1] = True
+    limit = tolerance * tolerance
+    stack = [(0, n - 1)]
+    while stack:
+        first, last = stack.pop()
+        ax, ay = points[first][0], points[first][1]
+        dx, dy = points[last][0] - ax, points[last][1] - ay
+        length = dx * dx + dy * dy
+        worst, worst_index = -1.0, -1
+        for i in range(first + 1, last):
+            px, py = points[i][0] - ax, points[i][1] - ay
+            if length == 0:
+                distance = px * px + py * py
+            else:
+                t = max(0.0, min(1.0, (px * dx + py * dy) / length))
+                ex, ey = px - t * dx, py - t * dy
+                distance = ex * ex + ey * ey
+            if distance > worst:
+                worst, worst_index = distance, i
+        if worst_index >= 0 and worst > limit:
+            keep[worst_index] = True
+            stack.append((first, worst_index))
+            stack.append((worst_index, last))
+    return [point for point, kept in zip(points, keep) if kept]
+
+
+def _bbox_ring(ring: list) -> list:
+    lons, lats = [p[0] for p in ring], [p[1] for p in ring]
+    west, south, east, north = min(lons), min(lats), max(lons), max(lats)
+    return [[west, south], [east, south], [east, north], [west, north], [west, south]]

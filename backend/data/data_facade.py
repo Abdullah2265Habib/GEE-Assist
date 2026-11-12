@@ -4,10 +4,11 @@ from typing import Optional
 
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.data.clients.i_gemini_client import IGeminiClient
+from backend.data.clients.i_geocoding_client import IGeocodingClient
 from backend.data.i_data_facade import IDataFacade
-from backend.dto import CheckDTO, ChunkDTO, FormDTO
+from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 from backend.dto.check_dto import CHECK_FAIL
-from backend.exceptions import GEEError
+from backend.exceptions import GEEError, PlaceSearchError
 
 _NO_GEE = "Google Earth Engine is not set up in this build."
 
@@ -15,7 +16,8 @@ _NO_GEE = "Google Earth Engine is not set up in this build."
 class DataFacade(IDataFacade):
     """Class diagram: DataFacade (-geminiClient, -geeClient, -userDAO, -projectDAO, -formulaDAO).
 
-    The DAOs are wired in when persistence is built.
+    The DAOs are wired in when persistence is built. The geocoding client looks up
+    places by name for the AOI (not in the diagram, which predates place search).
     """
 
     def __init__(
@@ -25,15 +27,22 @@ class DataFacade(IDataFacade):
         user_dao=None,
         project_dao=None,
         formula_dao=None,
+        geocoding_client: Optional[IGeocodingClient] = None,
     ):
         self._gemini_client = gemini_client
         self._gee_client = gee_client
         self._user_dao = user_dao
         self._project_dao = project_dao
         self._formula_dao = formula_dao
+        self._geocoding_client = geocoding_client
 
     def process_query(self, prompt: str) -> FormDTO:
         return self._gemini_client.process_query(prompt)
+
+    def search_places(self, query: str) -> list[PlaceDTO]:
+        if self._geocoding_client is None:
+            raise PlaceSearchError("Place search is not set up in this build. Draw the area on the map instead.")
+        return self._geocoding_client.search(query)
 
     def fetch_chunk(
         self,

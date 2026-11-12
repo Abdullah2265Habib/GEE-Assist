@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
-from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, ValidationDTO
+from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
 from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
@@ -86,6 +86,10 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def import_aoi(self, file_path: str) -> str: ...
+
+    @abstractmethod
+    def search_place(self, name: str) -> list[PlaceDTO]:
+        """Find a city, region or country by name; each match's ``aoi`` is its exact boundary."""
 
     @abstractmethod
     def get_kept_requests(self) -> list[FormDTO]: ...

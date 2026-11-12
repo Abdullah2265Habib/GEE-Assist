@@ -143,8 +143,6 @@ def ground_with_entities(form: FormDTO, entities: list[EntityDTO]) -> FormDTO:
     places = list(dict.fromkeys(e.value for e in entities if e.label == "PLACE"))
     if places and not form.aoi_name:
         changes["aoi_name"] = ", ".join(places)
-    if places and not form.aoi:
-        notes.append(f"Couldn't locate {', '.join(places)} automatically; draw the area on the map.")
 
     return replace(form, **changes, notes=notes, entities=list(entities))
 
