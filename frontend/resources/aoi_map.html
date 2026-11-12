@@ -120,6 +120,15 @@
     if (fit) map.fitBounds(rect.getBounds(), { maxZoom: 14 });
   }
 
+  // A place's exact boundary (Polygon / MultiPolygon). Each polygon joins the drawn
+  // group on its own, so the edit / delete tools work on it like a drawn shape.
+  function setShape(text, fit) {
+    drawn.clearLayers();
+    L.geoJSON(JSON.parse(text), { style: function () { return shapeStyle; } })
+      .eachLayer(function (layer) { drawn.addLayer(layer); });
+    if (fit && drawn.getLayers().length) map.fitBounds(drawn.getBounds(), { maxZoom: 14 });
+  }
+
   function clearShape() { drawn.clearLayers(); }
 
   function showGeoJSON(text) {
