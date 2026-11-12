@@ -251,3 +251,19 @@ def test_no_data_and_outside_the_image_have_no_values(scene):
     west, south, east, north = info.bounds
     assert set(service.values_at(info, west + 0.0015, north - 0.0015).values()) == {None}  # the no-data corner
     assert set(service.values_at(info, west - 1, north + 1).values()) == {None}            # off the image
+
+
+# ------------------------------------------------------------------ through the business facade
+def test_the_facade_passes_viewing_calls_to_the_map_service(scene):
+    from unittest.mock import MagicMock
+
+    from backend.business.facade import BusinessFacade
+
+    facade = BusinessFacade(MagicMock(), MagicMock(), MagicMock(), map_service=MapService())
+    info = facade.describe_raster(str(scene))
+    presets = facade.raster_view_presets(info)
+    view = facade.render_raster(info, presets[0], max_size=40)
+    west, south, east, north = info.bounds
+
+    assert presets[0].key == "true_colour" and view.width == 40
+    assert facade.raster_values_at(info, west + 0.0105, north - 0.0305)["B8"] == 3500.0

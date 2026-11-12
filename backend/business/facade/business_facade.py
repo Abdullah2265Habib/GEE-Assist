@@ -4,9 +4,11 @@ from typing import Callable, Optional
 
 from backend.business.download.i_download_service import IDownloadService
 from backend.business.facade.i_business_facade import IBusinessFacade
+from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
 from backend.business.user.i_user_service import IUserService
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, ValidationDTO
+from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SessionInfoDTO,
@@ -21,8 +23,8 @@ from backend.dto.user_dto import (
 class BusinessFacade(IBusinessFacade):
     """Class diagram: BusinessFacade. Delegates to the services.
 
-    Other services (analysis, map, explanation, report) are injected here as
-    their use cases are implemented.
+    Other services (analysis, explanation, report) are injected here as their use
+    cases are implemented.
     """
 
     def __init__(
@@ -30,10 +32,12 @@ class BusinessFacade(IBusinessFacade):
         user_service: IUserService,
         request_service: IRequestService,
         download_service: IDownloadService,
+        map_service: IMapService,
     ):
         self._user_service = user_service
         self._request_service = request_service
         self._download_service = download_service
+        self._map_service = map_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -146,3 +150,16 @@ class BusinessFacade(IBusinessFacade):
 
     def shutdown_downloads(self) -> None:
         self._download_service.shutdown()
+
+    # ------------------------------------------------------------- viewing GeoTIFFs
+    def describe_raster(self, path: str) -> RasterInfoDTO:
+        return self._map_service.describe(path)
+
+    def raster_view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
+        return self._map_service.view_presets(info)
+
+    def render_raster(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
+        return self._map_service.render(info, preset, max_size)
+
+    def raster_values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]:
+        return self._map_service.values_at(info, lon, lat)
