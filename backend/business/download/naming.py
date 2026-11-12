@@ -27,6 +27,27 @@ def dataset_folder_name(form: FormDTO) -> str:
     return "_".join(parts)
 
 
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_TIME = re.compile(r"\d{2}-\d{2}-\d{2}")  # older names ended with the download time
+
+
+def parse_dataset_name(name: str) -> tuple[str, str, str]:
+    """The satellite, start date and end date in a download name ("" for what it does not have).
+
+    The reverse of ``dataset_folder_name``; older names ended with the download time
+    (``..._2026-11-07_00-11-04``) instead of the date range, and a repeated download
+    has ``_2``, ``_3``, ... at the end.
+    """
+    parts = name.split("_")
+    if len(parts) < 3:
+        return "", "", ""
+    dates = [part for part in parts[3:5] if _DATE.fullmatch(part)]
+    if len(parts) > 4 and _TIME.fullmatch(parts[4]):
+        dates = []  # the download date and time, not a date range
+    start, end = (dates + ["", ""])[:2]
+    return parts[0], start, end
+
+
 def unique_folder(parent: Path, name: str) -> Path:
     """``parent / name``, or ``name_2``, ``name_3``, ... if that folder already exists."""
     folder = parent / name
