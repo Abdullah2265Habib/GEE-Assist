@@ -39,7 +39,7 @@ from backend.config import (
     datasets_by_category,
     get_dataset,
 )
-from backend.dto import FormDTO, ValidationDTO
+from backend.dto import FormDTO, PlaceDTO, ValidationDTO
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.exceptions import GeeAssistError
 from frontend import form_theme as theme
@@ -107,6 +107,8 @@ class ParameterFormView(QWidget):
         self._imported_name: str = ""
         self._drawn_aoi: str = ""  # GeoJSON of the rectangle / circle / polygon on the map
         self._drawn_name: str = ""
+        self._places: list[PlaceDTO] = []  # matches of the last place search
+        self._place_search_id = 0          # ignores answers to searches that were superseded
         self._error_labels: dict[str, QLabel] = {}
         self._error_targets: dict[str, tuple[QWidget, ...]] = {}
 
@@ -183,6 +185,9 @@ class ParameterFormView(QWidget):
         self.map_widget.circle_drawn.connect(self._on_map_circle_drawn)
         self.map_widget.polygon_drawn.connect(self._on_map_polygon_drawn)
         self.map_widget.shape_cleared.connect(self._on_map_shape_cleared)
+        self.place_edit.returnPressed.connect(self._on_place_search)
+        self.place_search_button.clicked.connect(self._on_place_search)
+        self.place_results_combo.activated.connect(self._on_place_chosen)
         for spin in self._bbox_spins:
             spin.editingFinished.connect(self._on_bbox_typed)
         pad_spin_text(self.scale_spin, self.cloud_spin, *self._bbox_spins)
@@ -261,7 +266,8 @@ class ParameterFormView(QWidget):
 
     def _build_aoi_group(self) -> QFrame:
         card, body = section_card(
-            "Area of Interest", "Import a boundary file, or draw a rectangle, circle or polygon on the map."
+            "Area of Interest",
+            "Import a boundary file, search a city or country by name, or draw a rectangle, circle or polygon on the map.",
         )
 
         # Either a GeoJSON file OR a shape drawn on the map.
@@ -304,6 +310,28 @@ class ParameterFormView(QWidget):
         toggle_row.addSpacing(16)
         toggle_row.addWidget(self.aoi_summary_stack, 1)
 
+        # Place search (draw mode only): the exact boundary of a city / region /
+        # country becomes the AOI. Other matches can be picked from a list.
+        self.place_edit = QLineEdit()
+        self.place_edit.setPlaceholderText("Search a city, region or country, e.g. Lahore, Pakistan")
+        self.place_edit.setClearButtonEnabled(True)
+        self.place_search_button = QPushButton("Find place")
+        self.place_search_button.setObjectName("SecondaryButton")
+        self.place_search_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.place_results_combo = QComboBox()
+        self.place_results_combo.setToolTip("Other places with this name")
+        self.place_results_combo.setMinimumContentsLength(24)
+        self.place_results_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.place_results_combo.hide()
+
+        self.place_box = QWidget()
+        place_layout = QHBoxLayout(self.place_box)
+        place_layout.setContentsMargins(0, 0, 0, 0)
+        place_layout.setSpacing(8)
+        place_layout.addWidget(self.place_edit, 3)
+        place_layout.addWidget(self.place_search_button)
+        place_layout.addWidget(self.place_results_combo, 2)
+
         self.map_widget = AoiMapWidget()
         self.map_widget.setMinimumHeight(360)
 
@@ -334,6 +362,7 @@ class ParameterFormView(QWidget):
         ))
 
         body.addLayout(toggle_row)
+        body.addWidget(self.place_box)
         body.addWidget(self.map_widget)
         body.addWidget(self.coords_box)
         body.addWidget(self._error_label("aoi"))
@@ -426,6 +455,7 @@ class ParameterFormView(QWidget):
         self.map_widget.show_geojson("")
         self._clear_drawn_shape()
         self.map_widget.clear_shape()
+        self._clear_place_search()
         self.aoi_file_toggle.setChecked(True)
         self._on_aoi_mode_changed(AOI_FILE)
 
@@ -505,6 +535,7 @@ class ParameterFormView(QWidget):
     def _on_aoi_mode_changed(self, mode: int) -> None:
         self.aoi_summary_stack.setCurrentIndex(mode)
         self.coords_box.setVisible(mode == AOI_DRAW)
+        self.place_box.setVisible(mode == AOI_DRAW)
         self.map_widget.set_mode("draw" if mode == AOI_DRAW else "file")
         self._set_field_error("aoi", "")
         self._update_estimate()
@@ -614,6 +645,78 @@ class ParameterFormView(QWidget):
                 sync_spins=False,
             )
             self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+
+    # ------------------------------------------------------- place search
+    def _on_place_search(self) -> None:
+        name = self.place_edit.text().strip()
+        if not name:
+            self._set_field_error("aoi", "Type the name of a city, region or country to search for.")
+            return
+        self._place_search_id += 1
+        search_id = self._place_search_id
+        self._set_place_busy(True)
+        self._set_field_error("aoi", "")
+        run_task(
+            self, self._facade.search_place, name,
+            on_success=lambda places: self._on_places_found(search_id, places),
+            on_error=lambda exc: self._on_place_search_failed(search_id, exc),
+        )
+
+    def _on_places_found(self, search_id: int, places: list[PlaceDTO]) -> None:
+        if search_id != self._place_search_id:
+            return  # a newer search (or a reset) replaced this one
+        self._set_place_busy(False)
+        self.show_places(places)
+
+    def _on_place_search_failed(self, search_id: int, exc: Exception) -> None:
+        if search_id != self._place_search_id:
+            return
+        self._set_place_busy(False)
+        self._set_field_error(
+            "aoi", str(exc) if isinstance(exc, GeeAssistError) else "Place search failed. Please try again."
+        )
+
+    def show_places(self, places: list[PlaceDTO]) -> None:
+        """Use the first place's boundary as the AOI and list the other matches to choose from."""
+        self._places = list(places)
+        self.place_results_combo.clear()
+        for place in self._places:
+            self.place_results_combo.addItem(f"{place.display_name} ({place.kind})")
+            self.place_results_combo.setItemData(
+                self.place_results_combo.count() - 1, place.display_name, Qt.ItemDataRole.ToolTipRole
+            )
+        self.place_results_combo.setVisible(len(self._places) > 1)
+        if self._places:
+            self.place_results_combo.setCurrentIndex(0)
+            self.set_place_area(self._places[0])
+
+    def _on_place_chosen(self, index: int) -> None:
+        if 0 <= index < len(self._places):
+            self.set_place_area(self._places[index])
+
+    def set_place_area(self, place: PlaceDTO) -> None:
+        """Make ``place``'s exact boundary the AOI, shown on the map in "Draw on map" mode."""
+        geometry = json.loads(place.aoi)
+        self.aoi_draw_toggle.setChecked(True)
+        self._on_aoi_mode_changed(AOI_DRAW)
+        self._set_drawn_shape(
+            geometry, place.name,
+            f"<b>{place.name}</b> · {place.kind} boundary · {vertex_count(geometry):,} vertices",
+        )
+        self.map_widget.set_shape(place.aoi, fit=True)
+
+    def _set_place_busy(self, busy: bool) -> None:
+        self.place_search_button.setEnabled(not busy)
+        self.place_edit.setEnabled(not busy)
+        self.place_search_button.setText("Searching…" if busy else "Find place")
+
+    def _clear_place_search(self) -> None:
+        self._place_search_id += 1  # drop any answer still on its way
+        self._places = []
+        self.place_results_combo.clear()
+        self.place_results_combo.hide()
+        self.place_edit.clear()
+        self._set_place_busy(False)
 
     # ------------------------------------------------------- natural language
     def _on_query_submitted(self, text: str) -> None:
@@ -746,6 +849,7 @@ class ParameterFormView(QWidget):
         self.map_widget.show_geojson("")
         self._clear_drawn_shape()
         self.map_widget.clear_shape()
+        self._clear_place_search()
 
     def set_crs(self, code: str) -> None:
         index = self.crs_combo.findData(code)
