@@ -29,6 +29,9 @@ class FakeDataFacade(IDataFacade):
             raise self.error
         return self.answer
 
+    def search_places(self, query):  # not used here
+        raise NotImplementedError
+
     def fetch_chunk(self, chunk, path, on_progress=None, should_stop=None) -> bool:  # not used here
         raise NotImplementedError
 
