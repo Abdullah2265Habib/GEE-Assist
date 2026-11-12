@@ -149,3 +149,58 @@ def test_submit_returns_the_result_and_keeps_valid_forms(view):
     view.set_drawn_area(json.dumps(SQUARE), "Rectangle")
     result = view.submit()
     assert result.is_valid and len(view.kept) == 1 and view.kept[0].aoi_name == "Rectangle"
+
+
+# ------------------------------------------------------------------ place search
+def _place(display: str, kind: str = "city", geometry=SQUARE):
+    from backend.dto import PlaceDTO
+
+    return PlaceDTO(display.split(",")[0], display, kind, json.dumps(geometry))
+
+
+def test_a_found_place_becomes_the_exact_area(view):
+    lahore = _place("Lahore, Punjab, Pakistan")
+    view.show_places([lahore])
+    form = view.collect_form()
+    assert view.aoi_draw_toggle.isChecked() and not view.place_box.isHidden()
+    assert json.loads(form.aoi) == SQUARE and form.aoi_name == "Lahore"
+    assert ("shape", lahore.aoi) in view.map_widget.calls  # the outline itself, not its bounding box
+    assert view.place_results_combo.isHidden()  # only one match: nothing to choose
+
+
+def test_other_matches_can_be_chosen(view):
+    district = {"type": "Polygon", "coordinates": [[[74.0, 31.2], [74.8, 31.2], [74.8, 31.9], [74.0, 31.9], [74.0, 31.2]]]}
+    view.show_places([_place("Lahore, Punjab, Pakistan"), _place("Lahore District, Punjab, Pakistan", "district", district)])
+    assert not view.place_results_combo.isHidden() and view.place_results_combo.count() == 2
+    view.place_results_combo.activated.emit(1)
+    form = view.collect_form()
+    assert form.aoi_name == "Lahore District" and json.loads(form.aoi) == district
+
+
+def test_place_search_errors_are_shown_under_the_area(view):
+    from backend.exceptions import PlaceSearchError
+
+    view._place_search_id = 7
+    view._on_place_search_failed(7, PlaceSearchError("No boundary found for \"Atlantis\"."))
+    assert "Atlantis" in view._error_labels["aoi"].text() and view.place_search_button.isEnabled()
+
+
+def test_a_superseded_search_answer_is_ignored(view):
+    view._place_search_id = 3
+    view._on_places_found(2, [_place("Old, Answer")])
+    assert view.collect_form().aoi == ""
+
+
+def test_an_empty_place_name_asks_for_one(view):
+    view.aoi_draw_toggle.click()
+    view.place_search_button.click()
+    assert not view._error_labels["aoi"].isHidden() and view.place_search_button.isEnabled()
+    view._facade.search_place.assert_not_called()
+
+
+def test_clear_area_forgets_the_place_search(view):
+    view.place_edit.setText("Lahore")
+    view.show_places([_place("Lahore, Punjab, Pakistan"), _place("Lahore District, Punjab, Pakistan")])
+    view.clear_area()
+    assert view.collect_form().aoi == "" and view.place_edit.text() == ""
+    assert view.place_results_combo.isHidden() and view.place_results_combo.count() == 0
