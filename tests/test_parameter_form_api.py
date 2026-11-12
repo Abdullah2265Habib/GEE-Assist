@@ -204,3 +204,14 @@ def test_clear_area_forgets_the_place_search(view):
     view.clear_area()
     assert view.collect_form().aoi == "" and view.place_edit.text() == ""
     assert view.place_results_combo.isHidden() and view.place_results_combo.count() == 0
+
+
+def test_a_query_s_area_is_drawn_as_its_outline(view):
+    from backend.dto import FormDTO
+
+    outline = {"type": "Polygon", "coordinates": [[[73.0, 31.0], [73.2, 31.05], [73.15, 31.3], [73.0, 31.0]]]}
+    filled = view.apply_form(FormDTO(aoi=json.dumps(outline), aoi_name="Sahiwal"))
+    form = view.collect_form()
+    assert "area (Sahiwal)" in filled and json.loads(form.aoi) == outline
+    assert ("shape", json.dumps(outline)) in view.map_widget.calls
+    assert not any(call[0] == "bbox" for call in view.map_widget.calls)
