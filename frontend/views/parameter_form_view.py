@@ -792,10 +792,10 @@ class ParameterFormView(QWidget):
             self._on_aoi_mode_changed(AOI_DRAW)
             self._set_drawn_shape(
                 geometry, name,
-                f"<b>{name}</b> · approximate area from your request. Adjust it on the map if needed.",
+                f"<b>{name}</b> · area from your request ({vertex_count(geometry):,} vertices). "
+                "Adjust it on the map if needed.",
             )
-            min_lon, min_lat, max_lon, max_lat = bbox_of(geometry)
-            self.map_widget.set_bbox(min_lon, min_lat, max_lon, max_lat, fit=True)
+            self.map_widget.set_shape(form.aoi, fit=True)  # the place's outline, not its bounding box
             filled.append(f"area ({name})")
 
         analysis_index = self.analysis_combo.findData(form.analysis_type) if form.analysis_type else -1
