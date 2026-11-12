@@ -87,3 +87,26 @@ S2 = ("B2", "B3", "B4", "B8", "B11")
 ])
 def test_band_roles(satellite, bands, expected):
     assert band_roles(satellite, bands) == expected
+
+
+# ------------------------------------------------------------------ colour maps
+from backend.business.map.colour_maps import DYNAMIC_WORLD_CLASSES, GREYS, VIRIDIS  # noqa: E402
+
+
+def test_colour_map_blends_between_its_stops():
+    table = GREYS.table()
+    assert table.shape == (256, 3) and table.dtype == np.uint8
+    assert table[0].tolist() == [0, 0, 0] and table[-1].tolist() == [255, 255, 255]
+    assert GREYS.colours(3) == ("#000000", "#808080", "#FFFFFF")
+    assert VIRIDIS.colours(2) == ("#440154", "#FDE725")
+
+
+def test_colour_map_looks_up_values_and_clips_them():
+    rgb = GREYS.apply(np.array([[-1.0, 0.0, 0.5, 1.0, 9.0, np.nan]]))
+    assert rgb.shape == (1, 6, 3)
+    assert rgb[0, :, 0].tolist() == [0, 0, 128, 255, 255, 0]
+
+
+def test_dynamic_world_has_its_nine_classes():
+    assert len(DYNAMIC_WORLD_CLASSES) == 9
+    assert DYNAMIC_WORLD_CLASSES[0] == ("Water", "#419BDF") and DYNAMIC_WORLD_CLASSES[6][0] == "Built area"
