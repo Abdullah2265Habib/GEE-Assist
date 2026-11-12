@@ -43,6 +43,9 @@ class StubMap(QWidget):
     def set_bbox(self, *bbox, fit=True):
         self.calls.append(("bbox", bbox))
 
+    def set_shape(self, geojson, fit=True):
+        self.calls.append(("shape", geojson))
+
     def clear_shape(self):
         self.calls.append(("clear",))
 
