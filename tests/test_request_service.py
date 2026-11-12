@@ -12,7 +12,7 @@ from backend.business.request.query_entities import QueryEntityExtractor
 from backend.business.request.query_interpretation import check_interpretation, ground_with_entities
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.data.i_data_facade import IDataFacade
-from backend.dto import FormDTO
+from backend.dto import FormDTO, PlaceDTO
 from backend.exceptions import LLMServiceError, ValidationError
 
 BOX = json.dumps({"type": "Polygon", "coordinates": [[[73, 31], [73.2, 31], [73.2, 31.2], [73, 31.2], [73, 31]]]})
@@ -197,3 +197,40 @@ def test_invalid_area_is_dropped():
     flat = json.dumps({"type": "Polygon", "coordinates": [[[1, 1], [1, 1], [1, 1], [1, 1]]]})
     form = check_interpretation(FormDTO(dataset="sentinel2_sr", aoi=flat), TODAY)
     assert form.aoi == "" and any("area" in n for n in form.notes)
+
+
+# ----------------------------------------------------------- the area of a named place
+OUTLINE = {"type": "Polygon", "coordinates": [[[73.0, 31.0], [73.2, 31.05], [73.15, 31.3], [72.95, 31.2], [73.0, 31.0]]]}
+SAHIWAL = PlaceDTO("Sahiwal", "Sahiwal, Punjab, Pakistan", "city", json.dumps(OUTLINE))
+
+
+def test_the_named_place_s_boundary_replaces_gemini_s_rectangle():
+    facade = FakeDataFacade(FormDTO(dataset="sentinel2_sr", aoi=BOX, aoi_name="Sahiwal, Pakistan"), places=[SAHIWAL])
+    form = service_with(facade).submit_query("NDVI for Sahiwal")
+    assert facade.place_queries == ["Sahiwal, Pakistan"]  # Gemini's fuller name is looked up
+    assert json.loads(form.aoi) == OUTLINE and form.aoi_name == "Sahiwal, Pakistan"
+    assert any("boundary of Sahiwal, Punjab, Pakistan" in n for n in form.notes)
+
+
+def test_without_a_boundary_gemini_s_rectangle_is_kept_and_called_approximate():
+    facade = FakeDataFacade(FormDTO(dataset="sentinel2_sr", aoi=BOX, aoi_name="Sahiwal"))
+    form = service_with(facade).submit_query("NDVI for Sahiwal")
+    assert form.aoi == BOX and any("approximate rectangle" in n for n in form.notes)
+
+
+def test_a_place_with_no_area_at_all_asks_the_user_to_draw_it():
+    form = service_with(FakeDataFacade(FormDTO(dataset="sentinel2_sr"))).submit_query("NDVI for Sahiwal")
+    assert form.aoi == "" and form.aoi_name == "Sahiwal"
+    assert any("Couldn't locate Sahiwal" in n for n in form.notes)
+
+
+def test_when_gemini_fails_the_place_is_still_looked_up():
+    facade = FakeDataFacade(error=LLMServiceError("Gemini is busy right now."), places=[SAHIWAL])
+    form = service_with(facade).submit_query("NDVI for Sahiwal")
+    assert facade.place_queries == ["Sahiwal"] and json.loads(form.aoi) == OUTLINE
+
+
+def test_no_place_named_means_no_lookup():
+    facade = FakeDataFacade(FormDTO(dataset="sentinel2_sr"), places=[SAHIWAL])
+    service_with(facade).submit_query("NDVI in 2023")
+    assert facade.place_queries == []
