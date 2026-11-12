@@ -4,14 +4,15 @@ The file is read and drawn in the background (large downloads take a moment). Th
 right-hand panel picks the view (true colour, false colour, NDVI, NDWI, land-cover
 classes, single bands), explains it with a legend, shows the values under the
 pointer and the file's details. The picture zooms with the mouse wheel and pans by
-dragging; double-click fits it to the window again.
+dragging; double-click fits it to the window again. "Show on map" lays the current
+view over the Query Input map.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import QBuffer, QIODevice, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QFontMetrics
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -38,6 +39,7 @@ from frontend.widgets.raster_legend import RasterLegend, format_value
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 320
+MAP_IMAGE_SIZE = 1024  # longer side of the picture sent to the map
 HOVER_DELAY_MS = 40   # wait for the pointer to rest a moment before reading values
 
 STYLESHEET = f"""
@@ -86,6 +88,8 @@ class ElidedLabel(QLabel):
 
 
 class RasterViewerView(QWidget):
+    show_on_map_requested = pyqtSignal(bytes, object, str)  # PNG, (west, south, east, north), title
+
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("ViewerPage")
@@ -136,6 +140,9 @@ class RasterViewerView(QWidget):
             self.detail_labels[key] = value
         self.details_grid.setColumnStretch(1, 1)
 
+        self.map_button = QPushButton("Show on map", objectName="PrimaryButton")
+        self.map_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.map_button.setToolTip("Lay this view over the Query Input map")
         self.fit_button = QPushButton("Fit to window", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
         self.buttons = QHBoxLayout()
@@ -161,6 +168,7 @@ class RasterViewerView(QWidget):
         column.addWidget(_section("Details"))
         column.addLayout(self.details_grid)
         column.addStretch(1)
+        column.addWidget(self.map_button)
         column.addLayout(self.buttons)
         panel_scroll = QScrollArea()
         panel_scroll.setWidgetResizable(True)
@@ -195,6 +203,7 @@ class RasterViewerView(QWidget):
         self.canvas.left_image.connect(self._on_left_image)
         self.fit_button.clicked.connect(self.canvas.fit)
         self.folder_button.clicked.connect(self.open_folder)
+        self.map_button.clicked.connect(self.show_on_map)
         self._set_ready(False)
 
     # ------------------------------------------------------------- opening
@@ -238,6 +247,7 @@ class RasterViewerView(QWidget):
         self.view = view
         self.canvas.set_image(rgba_to_image(view.rgba), keep_view=same_file)
         self.legend.set_legend(view.legend)
+        self.map_button.setEnabled(True)
         if view.notes:
             self.banner.show_info(" ".join(view.notes))
         else:
@@ -255,6 +265,25 @@ class RasterViewerView(QWidget):
     def _set_ready(self, ready: bool) -> None:
         for widget in (self.preset_box, self.fit_button, self.folder_button):
             widget.setEnabled(ready)
+        self.map_button.setEnabled(ready and self.view is not None)
+
+    def show_on_map(self) -> None:
+        """Ask for the current view to be laid over the map, where the file lies."""
+        if self.info is None or self.view is None:
+            return
+        title = f"{self.info.name} · {self.view.preset.label}"
+        self.show_on_map_requested.emit(self.map_png(), self.info.bounds, title)
+
+    def map_png(self, max_size: int = MAP_IMAGE_SIZE) -> bytes:
+        """The current view as PNG, at most ``max_size`` pixels on its longer side."""
+        image = rgba_to_image(self.view.rgba)
+        if max(image.width(), image.height()) > max_size:
+            image = image.scaled(max_size, max_size, Qt.AspectRatioMode.KeepAspectRatio,
+                                 Qt.TransformationMode.SmoothTransformation)
+        buffer = QBuffer()
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        image.save(buffer, "PNG")
+        return bytes(buffer.data())
 
     def open_folder(self) -> None:
         if self.info is not None:

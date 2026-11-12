@@ -509,3 +509,18 @@ def test_file_menu_opens_any_geotiff(home, monkeypatch, chosen):
         assert opened == [chosen] and home.current_page() is home.viewer
     else:                                                          # cancelled: stay where we were
         assert opened == [] and home.current_page() is home.dashboard
+
+
+def test_show_on_map_lays_the_picture_over_the_query_input_map(home):
+    class FakeMap:
+        def __init__(self):
+            self.images = []
+
+        def show_image(self, png, bounds, title):
+            self.images.append((png, bounds, title))
+
+    home.query_input.form_view = type("Form", (), {"map_widget": FakeMap()})()
+    home.viewer.show_on_map_requested.emit(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")
+
+    assert home.query_input.form_view.map_widget.images == [(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")]
+    assert isinstance(home.current_page(), StubQueryWorkspace)

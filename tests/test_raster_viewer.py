@@ -124,3 +124,31 @@ def test_large_files_say_they_are_shown_scaled_down(viewer, sentinel, monkeypatc
                         lambda info, preset, max_size=1600: MapService().render(info, preset, max_size=20))
     viewer.open(str(sentinel))
     assert viewer.banner.text() == "Shown at 1/4.0 of full resolution."
+
+
+# ------------------------------------------------------------------ show on the map
+def test_show_on_map_sends_the_current_view_where_the_file_lies(viewer, sentinel):
+    from PyQt6.QtGui import QImage
+
+    assert not viewer.map_button.isEnabled()   # nothing drawn yet
+    viewer.open(str(sentinel))
+    viewer.preset_box.setCurrentIndex(2)      # NDVI
+    sent = []
+    viewer.show_on_map_requested.connect(lambda png, bounds, title: sent.append((png, bounds, title)))
+
+    assert viewer.map_button.isEnabled()
+    viewer.map_button.click()
+
+    [(png, bounds, title)] = sent
+    image = QImage.fromData(png, "PNG")
+    assert png.startswith(b"\x89PNG") and (image.width(), image.height()) == (80, 60)
+    assert bounds == viewer.info.bounds
+    assert title == "Sentinel-2_73.0400_31.0700_2023-01-01_2023-12-31 · NDVI (vegetation)"
+
+
+def test_pictures_for_the_map_are_kept_small(viewer, sentinel):
+    from PyQt6.QtGui import QImage
+
+    viewer.open(str(sentinel))
+    image = QImage.fromData(viewer.map_png(max_size=40), "PNG")
+    assert (image.width(), image.height()) == (40, 30)

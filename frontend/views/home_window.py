@@ -262,6 +262,7 @@ class HomeWindow(QMainWindow):
             app.aboutToQuit.connect(self.terminal.shutdown)
         self.query_input.download_requested.connect(self.start_download)
         self.downloads.view_requested.connect(self.show_viewer)
+        self.viewer.show_on_map_requested.connect(self.show_on_map)
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
@@ -292,6 +293,15 @@ class HomeWindow(QMainWindow):
                                               "GeoTIFF (*.tif *.tiff);;All files (*)")
         if path:
             self.show_viewer(path)
+
+    def show_on_map(self, png: bytes, bounds: tuple, title: str) -> None:
+        """Lay a viewer picture over the Query Input map and go there."""
+        form_view = getattr(self.query_input, "form_view", None)
+        map_widget = getattr(form_view, "map_widget", None)
+        if map_widget is None:
+            return
+        map_widget.show_image(png, bounds, title)
+        self.show_query_input()
 
     def show_viewer(self, path: str) -> None:
         """Show the GeoTIFF at ``path`` on the Viewer page."""
