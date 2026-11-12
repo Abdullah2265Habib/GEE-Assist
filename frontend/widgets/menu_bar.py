@@ -55,6 +55,7 @@ class AppMenuBar(QMenuBar):
 
         self.file_menu = self._menu("&File")
         self.new_request = self._action(self.file_menu, "&New request", "Ctrl+N")
+        self.open_geotiff = self._action(self.file_menu, "&Open GeoTIFF…", "Ctrl+O")
         self.file_menu.addSeparator()
         self.sign_out = self._action(self.file_menu, "Sign &out")
         self.exit = self._action(self.file_menu, "E&xit", "Ctrl+Q")

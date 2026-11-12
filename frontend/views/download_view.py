@@ -78,6 +78,12 @@ QPushButton#OpenButton {{
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.OPEN_BUTTON_TOP}, stop:1 {theme.LEAF});
 }}
 QPushButton#OpenButton:hover {{ background: {theme.LEAF_DARK}; }}
+QPushButton#ViewButton {{
+    color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
+    border-radius: 6px; padding: 0 14px; font-size: 9.5pt;
+}}
+QPushButton#ViewButton:hover {{ background: {theme.FOAM}; border-color: {theme.BORDER_HOVER}; }}
+QPushButton#ViewButton:disabled {{ color: {theme.SUBTLE}; border-color: {theme.BORDER}; }}
 QFrame#DownloadFooter {{ background: {theme.WHITE}; border-top: 1px solid {theme.BORDER}; }}
 QLabel#FooterText {{ color: {theme.MUTED}; font-size: 9pt; }}
 """
@@ -87,6 +93,7 @@ class DownloadView(QWidget):
     """Shows all downloads and lets the user pause, resume, retry, cancel and open them."""
 
     download_started = pyqtSignal(object)  # DownloadJobDTO
+    view_requested = pyqtSignal(str)       # path of a downloaded GeoTIFF to show
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
@@ -326,6 +333,7 @@ class DownloadView(QWidget):
             row.cancel_clicked.connect(self._cancel_job)
         else:
             row.open_clicked.connect(self._open_job)
+            row.view_clicked.connect(lambda job: self.view_requested.emit(job.dataset.path))
         return row
 
     def _remove_row(self, job_id: str) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
@@ -223,9 +225,10 @@ class JobRow(QFrame):
 
 
 class CompletedRow(QFrame):
-    """A finished download; the green button opens its folder."""
+    """A finished download: "View" shows its GeoTIFF; the green button opens its folder."""
 
     open_clicked = pyqtSignal(object)  # DownloadJobDTO
+    view_clicked = pyqtSignal(object)  # DownloadJobDTO
 
     def __init__(self, job: DownloadJobDTO, parent: QWidget | None = None):
         super().__init__(parent)
@@ -240,6 +243,9 @@ class CompletedRow(QFrame):
         names.addWidget(self.details)
 
         self.when = QLabel(objectName="JobWhen")
+        self.view_button = QPushButton("View", objectName="ViewButton")
+        self.view_button.setFixedHeight(28)
+        self.view_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_button = QPushButton("▶", objectName="OpenButton")
         self.open_button.setFixedSize(30, 28)
         self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -249,10 +255,13 @@ class CompletedRow(QFrame):
         layout.addLayout(names, 1)
         layout.addWidget(self.when)
         layout.addSpacing(10)
+        layout.addWidget(self.view_button)
+        layout.addSpacing(6)
         layout.addWidget(self.open_button)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
         self.open_button.clicked.connect(lambda: self.open_clicked.emit(self.job))
+        self.view_button.clicked.connect(lambda: self.view_clicked.emit(self.job))
         self.update_job(job)
 
     def update_job(self, job: DownloadJobDTO) -> None:
@@ -263,3 +272,6 @@ class CompletedRow(QFrame):
         self.when.setText(f"Completed: {format_when(job.finished_at)}")
         path = job.dataset.path if job.dataset else job.folder
         self.open_button.setToolTip(f"Open the folder\n{path}")
+        has_file = job.dataset is not None and Path(job.dataset.path).is_file()
+        self.view_button.setEnabled(has_file)
+        self.view_button.setToolTip("Show the downloaded GeoTIFF" if has_file else "The GeoTIFF is no longer there")

@@ -13,6 +13,7 @@ falls back to manual coordinate entry.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from pathlib import Path
@@ -166,6 +167,21 @@ class AoiMapWidget(QWidget):
 
     def show_geojson(self, geojson: str) -> None:
         self._run(f"showGeoJSON({json.dumps(geojson)})")
+
+    def show_image(self, png: bytes, bounds: tuple[float, float, float, float], title: str,
+                   opacity: float = 0.8) -> None:
+        """Lay a PNG over the map at ``bounds`` (west, south, east, north in degrees), with an
+        opacity slider and a "Remove from map" button on the map.
+
+        The image is stretched over the bounds, which suits the small areas GEE-Assist
+        downloads; over many degrees of latitude it drifts slightly from the map.
+        """
+        url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        west, south, east, north = bounds
+        self._run(f"showImage({json.dumps(url)}, {west}, {south}, {east}, {north}, {json.dumps(title)}, {opacity})")
+
+    def clear_image(self) -> None:
+        self._run("clearImage()")
 
     # --------------------------------------------------------------- internals
     def _inject_webchannel_script(self) -> None:

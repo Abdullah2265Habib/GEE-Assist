@@ -12,6 +12,12 @@
   <style>
     html, body, #map { height: 100%; margin: 0; }
     .hint { background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font: 12px sans-serif; }
+    .overlay-box { background: rgba(255,255,255,0.95); padding: 8px 10px; border-radius: 6px;
+                   font: 12px sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,0.3); max-width: 230px; }
+    .overlay-box .overlay-title { font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+    .overlay-box label { display: block; margin-bottom: 6px; }
+    .overlay-box input { width: 100%; }
+    .overlay-box button { font: 12px sans-serif; cursor: pointer; }
   </style>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
@@ -130,6 +136,36 @@
   }
 
   function clearShape() { drawn.clearLayers(); }
+
+  // ---- a downloaded GeoTIFF laid over the map, with an opacity slider ----
+  var image = null;
+  var imageBox = L.control({ position: 'topright' });
+  imageBox.onAdd = function () {
+    var div = L.DomUtil.create('div', 'overlay-box');
+    div.innerHTML = '<div class="overlay-title"></div>' +
+        '<label>Opacity <input type="range" min="0" max="100"></label>' +
+        '<button type="button">Remove from map</button>';
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+    div.querySelector('input').oninput = function (e) { if (image) image.setOpacity(e.target.value / 100); };
+    div.querySelector('button').onclick = clearImage;
+    return div;
+  };
+
+  function showImage(url, west, south, east, north, title, opacity) {
+    clearImage();
+    image = L.imageOverlay(url, [[south, west], [north, east]], { opacity: opacity }).addTo(map);
+    imageBox.addTo(map);
+    var box = imageBox.getContainer();
+    box.querySelector('.overlay-title').textContent = title;
+    box.querySelector('input').value = Math.round(opacity * 100);
+    map.fitBounds(image.getBounds());
+  }
+
+  function clearImage() {
+    if (image) { map.removeLayer(image); image = null; }
+    imageBox.remove();
+  }
 
   function showGeoJSON(text) {
     footprint.clearLayers();

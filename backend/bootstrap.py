@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.business.download import Chunker, ChunkMerger, DownloadService
 from backend.business.facade import BusinessFacade, IBusinessFacade
+from backend.business.map import MapService
 from backend.business.request import RequestService
 from backend.business.user import UserService
 from backend.config import DEFAULT_DOWNLOAD_DIR, DownloadSettingsStore
@@ -47,4 +48,5 @@ def build_business_facade() -> IBusinessFacade:
         user_service=user_service,
         request_service=request_service,
         download_service=download_service,
+        map_service=MapService(),
     )

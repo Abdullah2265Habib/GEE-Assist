@@ -476,3 +476,51 @@ def test_command_reference_falls_back_to_help_in_the_terminal(home, monkeypatch)
     assert home.terminal_area.is_terminal_visible()
     assert "gkonsol — the GEE-Assist command line" in home.terminal.view.toPlainText()
     home.hide()
+
+
+# ------------------------------------------------------------------ viewer
+def test_view_on_a_completed_download_opens_the_viewer(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home.viewer, "open", opened.append)
+
+    home.downloads.view_requested.emit("D:/downloads/x/x.tif")
+
+    assert opened == ["D:/downloads/x/x.tif"]
+    assert home.current_page() is home.viewer and not home.back_button.isHidden()
+    home.back_button.click()
+    assert home.current_page() is home.dashboard
+
+
+@pytest.mark.parametrize("chosen", ["C:/data/scene.tif", ""])
+def test_file_menu_opens_any_geotiff(home, monkeypatch, chosen):
+    from PyQt6.QtWidgets import QFileDialog
+
+    from backend.config import DEFAULT_DOWNLOAD_DIR
+
+    asked, opened = [], []
+    monkeypatch.setattr(QFileDialog, "getOpenFileName",
+                        lambda parent, title, folder, filters: asked.append((title, folder)) or (chosen, ""))
+    monkeypatch.setattr(home.viewer, "open", opened.append)
+
+    home.menu_bar.open_geotiff.trigger()
+
+    assert asked == [("Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR))]   # starts in the downloads folder
+    if chosen:
+        assert opened == [chosen] and home.current_page() is home.viewer
+    else:                                                          # cancelled: stay where we were
+        assert opened == [] and home.current_page() is home.dashboard
+
+
+def test_show_on_map_lays_the_picture_over_the_query_input_map(home):
+    class FakeMap:
+        def __init__(self):
+            self.images = []
+
+        def show_image(self, png, bounds, title):
+            self.images.append((png, bounds, title))
+
+    home.query_input.form_view = type("Form", (), {"map_widget": FakeMap()})()
+    home.viewer.show_on_map_requested.emit(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")
+
+    assert home.query_input.form_view.map_widget.images == [(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")]
+    assert isinstance(home.current_page(), StubQueryWorkspace)

@@ -1,0 +1,66 @@
+"""Class diagram: MapService. Reads downloaded GeoTIFFs so they can be looked at."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from backend.business.download.naming import parse_dataset_name
+from backend.business.map import raster_renderer
+from backend.business.map.i_map_service import IMapService
+from backend.business.map.view_presets import presets_for
+from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.exceptions import MapError
+
+
+class MapService(IMapService):
+    def describe(self, path: str) -> RasterInfoDTO:
+        import rasterio
+        from rasterio.warp import transform_bounds
+
+        file = Path(path)
+        try:
+            with rasterio.open(file) as src:
+                names = tuple(name or f"Band {index}" for index, name in enumerate(src.descriptions, start=1))
+                bounds = tuple(src.bounds)
+                if src.crs and src.crs.to_epsg() != 4326:
+                    bounds = transform_bounds(src.crs, "EPSG:4326", *bounds, densify_pts=21)
+                satellite, start, end = parse_dataset_name(file.stem)
+                return RasterInfoDTO(
+                    path=str(file), name=file.stem, width=src.width, height=src.height, band_names=names,
+                    crs=src.crs.to_string() if src.crs else "", bounds=tuple(float(v) for v in bounds),
+                    nodata=src.nodata, dtype=src.dtypes[0], size_bytes=file.stat().st_size,
+                    satellite=satellite, start_date=start, end_date=end,
+                )
+        except rasterio.errors.RasterioIOError as exc:
+            raise MapError(f"Cannot open {file.name}: it is missing or not a GeoTIFF.") from exc
+
+    def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
+        return presets_for(info)
+
+    def render(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
+        return raster_renderer.render(info, preset, max_size)
+
+    def values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]:
+        import rasterio
+        from rasterio.warp import transform
+        from rasterio.windows import Window
+
+        empty: dict[str, float | None] = {band: None for band in info.band_names}
+        try:
+            with rasterio.open(info.path) as src:
+                x, y = lon, lat
+                if src.crs and src.crs.to_epsg() != 4326:
+                    xs, ys = transform("EPSG:4326", src.crs, [lon], [lat])
+                    x, y = xs[0], ys[0]
+                row, col = src.index(x, y)
+                if not (0 <= row < src.height and 0 <= col < src.width):
+                    return empty
+                pixel = src.read(window=Window(col, row, 1, 1))[:, 0, 0]
+        except rasterio.errors.RasterioIOError as exc:
+            raise MapError(f"Cannot read {info.name}: {exc}") from exc
+        return {band: (None if _missing(value, info.nodata) else float(value))
+                for band, value in zip(info.band_names, pixel)}
+
+
+def _missing(value: float, nodata: float | None) -> bool:
+    return bool(value != value) or (nodata is not None and value == nodata)  # NaN, or the no-data value

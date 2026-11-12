@@ -14,7 +14,7 @@ rasterio = pytest.importorskip("rasterio")
 from rasterio.transform import Affine  # noqa: E402
 
 from backend.business.download import Chunker, ChunkMerger, DownloadJobStore, DownloadService  # noqa: E402
-from backend.business.download.naming import dataset_folder_name  # noqa: E402
+from backend.business.download.naming import dataset_folder_name, parse_dataset_name  # noqa: E402
 from backend.config.download_settings import DownloadSettings, DownloadSettingsStore  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
 from backend.dto.download_dto import (  # noqa: E402
@@ -454,3 +454,15 @@ def test_folder_name_ends_with_the_request_dates(tmp_path):
     form = _form(tmp_path, start_date=date(2023, 1, 1), end_date=date(2023, 12, 31))
     assert dataset_folder_name(form) == "Sentinel-2_73.0250_31.0250_2023-01-01_2023-12-31"
     assert dataset_folder_name(_form(tmp_path, start_date=date(2023, 1, 1))) == "Sentinel-2_73.0250_31.0250_2023-01-01"
+
+
+@pytest.mark.parametrize("name, parsed", [
+    ("Sentinel-2_73.0250_31.0250_2023-01-01_2023-12-31", ("Sentinel-2", "2023-01-01", "2023-12-31")),
+    ("Sentinel-2_73.0250_31.0250_2023-01-01_2023-12-31_2", ("Sentinel-2", "2023-01-01", "2023-12-31")),
+    ("Sentinel-2_73.0250_31.0250_2023-01-01", ("Sentinel-2", "2023-01-01", "")),
+    ("Sentinel-2_68.7239_28.9751_2026-11-07_00-11-04", ("Sentinel-2", "", "")),  # older names: download time
+    ("Landsat-8_74.3500_31.5500", ("Landsat-8", "", "")),
+    ("my-raster", ("", "", "")),
+])
+def test_download_names_are_read_back(name, parsed):
+    assert parse_dataset_name(name) == parsed
