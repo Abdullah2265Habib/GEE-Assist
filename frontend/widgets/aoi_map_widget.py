@@ -3,7 +3,8 @@
 * draw mode: the user draws a rectangle, circle or polygon (Leaflet.draw).
   Rectangles come out as ``bbox_drawn``, circles as ``circle_drawn`` (centre +
   radius in metres) and polygons as ``polygon_drawn`` (GeoJSON geometry text).
-  Python can also push a typed bbox onto the map as a rectangle.
+  Python can also push a typed bbox onto the map as a rectangle, or the exact
+  outline of a place found by name (``set_shape``).
 * file mode: shows the outline of an imported GeoJSON AOI.
 
 Requires PyQt6-WebEngine. Without it the widget shows a notice and the form
@@ -155,6 +156,10 @@ class AoiMapWidget(QWidget):
 
     def set_bbox(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float, fit: bool = True) -> None:
         self._run(f"setBbox({min_lon}, {min_lat}, {max_lon}, {max_lat}, {'true' if fit else 'false'})")
+
+    def set_shape(self, geojson: str, fit: bool = True) -> None:
+        """Show a Polygon / MultiPolygon (e.g. a city's boundary) as the drawn, editable shape."""
+        self._run(f"setShape({json.dumps(geojson)}, {'true' if fit else 'false'})")
 
     def clear_shape(self) -> None:
         self._run("clearShape()")
